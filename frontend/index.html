@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="api-base-url" content="http://localhost:8000" />
+    <meta
+      name="description"
+      content="ผู้ช่วยวิเคราะห์ข้อมูลคลังสินค้าและผลผลิตทางการเกษตร"
+    />
+    <title>Agri Data Assistant</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-mark" aria-hidden="true">A</div>
+        <div class="brand-copy">
+          <h1>Agri Data Assistant</h1>
+          <p>ระบบสอบถามข้อมูลสหกรณ์การเกษตร</p>
+        </div>
+        <div class="connection" id="connection" role="status">
+          <span class="connection-dot" aria-hidden="true"></span>
+          <span id="connection-label">กำลังตรวจสอบระบบ</span>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="conversation" id="conversation" aria-live="polite">
+          <div class="welcome" id="welcome">
+            <p class="eyebrow">DATA WAREHOUSE</p>
+            <h2>วันนี้อยากดูข้อมูลส่วนไหน</h2>
+            <p class="welcome-copy">
+              สอบถามยอดขาย ผลผลิต การจัดส่ง หรือสินค้าคงคลังด้วยภาษาปกติ
+            </p>
+            <div class="suggestions" aria-label="ตัวอย่างคำถาม">
+              <button type="button" class="suggestion" data-question="ยอดขายสุทธิรายเดือนเป็นเท่าไร">
+                ยอดขายสุทธิรายเดือน
+              </button>
+              <button type="button" class="suggestion" data-question="สรุปปริมาณผลผลิตที่รับซื้อแต่ละเดือน">
+                ผลผลิตที่รับซื้อ
+              </button>
+              <button type="button" class="suggestion" data-question="สินค้าคงคลังปัจจุบันมีจำนวนเท่าไร">
+                สินค้าคงคลัง
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <form class="composer" id="ask-form">
+          <label class="sr-only" for="question">พิมพ์คำถาม</label>
+          <textarea
+            id="question"
+            name="question"
+            rows="1"
+            maxlength="1000"
+            placeholder="ถามเกี่ยวกับยอดขาย ผลผลิต การจัดส่ง หรือสินค้าคงคลัง..."
+            required
+          ></textarea>
+          <button class="send-button" id="send-button" type="submit">
+            <span>ส่งคำถาม</span>
+          </button>
+        </form>
+        <p class="composer-note">คำตอบสร้างจากข้อมูลในระบบและอาจต้องตรวจสอบก่อนนำไปใช้งาน</p>
+      </main>
+    </div>
+
+    <template id="user-message-template">
+      <article class="message message-user">
+        <div class="message-label">คุณ</div>
+        <p class="message-text"></p>
+      </article>
+    </template>
+
+    <template id="assistant-message-template">
+      <article class="message message-assistant">
+        <div class="message-heading">
+          <div class="message-label">AI Assistant</div>
+          <span class="status-badge"></span>
+        </div>
+        <p class="message-text"></p>
+        <div class="violations" hidden>
+          <p class="detail-title">เหตุผลที่ไม่อนุญาต</p>
+          <ul></ul>
+        </div>
+        <details class="sql-panel" hidden>
+          <summary>SQL ที่ใช้</summary>
+          <pre><code></code></pre>
+        </details>
+        <p class="sources" hidden></p>
+      </article>
+    </template>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>
