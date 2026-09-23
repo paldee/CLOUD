@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>AgriChain - สร้างบัญชี</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif
+        }
+
+        body {
+            min-height: 100vh;
+            background: #dce7ba; /* พื้นหลังเขียวตองอ่อนตามภาพ */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: #3f4728
+        }
+
+        .card {
+            width: 100%;
+            max-width: 480px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(8px);
+            border: 1px solid #c8d89e;
+            border-radius: 20px;
+            padding: 38px;
+            box-shadow: 0 10px 30px rgba(60, 70, 40, .1)
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            color: #805026; /* ตัวอักษรสีน้ำตาล */
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin-bottom: 25px
+        }
+
+        .logo-leaf {
+            width: 24px;
+            height: 24px;
+            color: #546341;
+        }
+
+        .head h1 {
+            font-size: 1.7rem;
+            color: #2e361d;
+            margin-bottom: 6px
+        }
+
+        .head p {
+            color: #5d6648;
+            font-size: .88rem;
+            margin-bottom: 25px
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 16px
+        }
+
+        .group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px
+        }
+
+        .group label {
+            font-size: .85rem;
+            font-weight: 600;
+            color: #434c32
+        }
+
+        /* ตกแต่ง Input และ Select ให้ตรงตามธีม */
+        .group input,
+        .group select {
+            padding: 11px 13px;
+            border: 1px solid #c2ce9e;
+            border-radius: 10px;
+            background: #fdfdfe;
+            outline: none;
+            font-size: .9rem;
+            color: #2e361d;
+            transition: all 0.2s ease;
+        }
+
+        /* Custom Dropdown Arrow */
+        .group select {
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%233f4728' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>");
+            background-repeat: no-repeat;
+            background-position: right 13px center;
+            background-size: 16px;
+            padding-right: 36px;
+            cursor: pointer;
+        }
+
+        .group input:focus,
+        .group select:focus {
+            border-color: #805026;
+            box-shadow: 0 0 0 3px rgba(128, 80, 38, .15);
+            background: #fff
+        }
+
+        .submit {
+            padding: 12px;
+            border: 0;
+            border-radius: 10px;
+            background: #A5B68D;
+            color: #2F1400;
+            font-weight: 700;
+            font-size: 0.95rem;
+            cursor: pointer;
+            margin-top: 6px;
+            transition: background 0.2s ease;
+        }
+
+        .submit:hover {
+            background: #96A77E;
+        }
+
+        .back {
+            text-align: center;
+            margin-top: 18px;
+            font-size: .85rem
+        }
+
+        .back a {
+            color: #805026;
+            text-decoration: none;
+            font-weight: 600
+        }
+
+        .back a:hover {
+            text-decoration: underline;
+        }
+
+        .msg {
+            text-align: center;
+            min-height: 20px;
+            font-size: .84rem;
+            font-weight: 600
+        }
+
+        .lang {
+            position: fixed;
+            right: 20px;
+            top: 18px
+        }
+
+        .lang button {
+            border: 1px solid #b8c88f;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 16px;
+            padding: 6px 10px;
+            cursor: pointer;
+            color: #3f4728;
+        }
+
+        .lang button+button {
+            margin-left: 3px
+        }
+
+        .lang .active {
+            background: #805026;
+            color: #fff;
+            border-color: #805026;
+            font-weight: 700
+        }
+
+        @media(max-width:520px) {
+            .card {
+                padding: 28px 20px
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="lang"><button id="th" class="active">ไทย</button><button id="en">EN</button></div>
+    <main class="card">
+        <div class="logo">
+            <svg class="logo-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M21 4C12 4 5 8 3 20c8-1 15-6 18-16Z" />
+                <path d="M4 19c4-5 8-8 14-11" />
+            </svg>
+            AgriChain
+        </div>
+        <div class="head">
+            <h1 data-i18n="title">สร้างบัญชีใหม่</h1>
+            <p data-i18n="sub">กรอกข้อมูลเพื่อสร้างบัญชีสำหรับใช้งาน AgriChain</p>
+        </div>
+        <form id="registerForm">
+            <div class="group">
+                <label data-i18n="nameLabel">ชื่อ</label>
+                <input id="name" required placeholder="ชื่อ-นามสกุล">
+            </div>
+            
+            <div class="group">
+                <label data-i18n="roleLabel">ตำแหน่ง</label>
+                <select id="role" required>
+                    <option value="" disabled selected data-i18n="roleSelect">-- เลือกตำแหน่ง --</option>
+                    <option value="ผู้จัดการ" data-i18n="roleManager">ผู้จัดการ</option>
+                    <option value="ผู้ใช้งาน" data-i18n="roleUser">ผู้ใช้งาน</option>
+                    <option value="แอดมิน" data-i18n="roleAdmin">แอดมิน</option>
+                </select>
+            </div>
+
+            <div class="group">
+                <label data-i18n="emailLabel">อีเมล</label>
+                <input id="email" type="email" required placeholder="name@example.com">
+            </div>
+            <div class="group">
+                <label data-i18n="passLabel">รหัสผ่าน</label>
+                <input id="password" type="password" required placeholder="********">
+            </div>
+            <div class="group">
+                <label data-i18n="confirmLabel">ยืนยันรหัสผ่าน</label>
+                <input id="confirm" type="password" required placeholder="********">
+            </div>
+            
+            <button class="submit" data-i18n="create">สร้างบัญชี</button>
+            <div class="msg" id="msg"></div>
+        </form>
+        <div class="back"><a href="index.html" data-i18n="back">← กลับไปหน้าเข้าสู่ระบบ</a></div>
+    </main>
+    <script>
+        const t = {
+            th: {
+                title: "สร้างบัญชีใหม่", sub: "กรอกข้อมูลเพื่อสร้างบัญชีสำหรับใช้งาน AgriChain",
+                nameLabel: "ชื่อ", roleLabel: "ตำแหน่ง",
+                roleSelect: "-- เลือกตำแหน่ง --", roleManager: "ผู้จัดการ", roleUser: "ผู้ใช้งาน", roleAdmin: "แอดมิน",
+                emailLabel: "อีเมล", passLabel: "รหัสผ่าน", confirmLabel: "ยืนยันรหัสผ่าน",
+                create: "สร้างบัญชี", back: "← กลับไปหน้าเข้าสู่ระบบ",
+                duplicate: "อีเมลนี้มีบัญชีอยู่แล้ว", mismatch: "รหัสผ่านไม่ตรงกัน",
+                ok: "สร้างบัญชีสำเร็จ! กำลังกลับไปหน้าเข้าสู่ระบบ...", err: "ไม่สามารถสร้างบัญชีได้"
+            },
+            en: {
+                title: "Create a new account", sub: "Enter your information to create an AgriChain account",
+                nameLabel: "Name", roleLabel: "Position",
+                roleSelect: "-- Select position --", roleManager: "Manager", roleUser: "User", roleAdmin: "Admin",
+                emailLabel: "Email", passLabel: "Password", confirmLabel: "Confirm password",
+                create: "Create account", back: "← Back to sign in",
+                duplicate: "This email is already registered.", mismatch: "Passwords do not match.",
+                ok: "Account created! Returning to sign in...", err: "Unable to create the account."
+            }
+        };
+
+        let lang = localStorage.getItem("language") || "th";
+        function setLang(x) {
+            lang = x;
+            localStorage.setItem("language", x);
+            document.documentElement.lang = x;
+            document.querySelectorAll("[data-i18n]").forEach(e => e.textContent = t[x][e.dataset.i18n]);
+            th.classList.toggle("active", x === "th");
+            en.classList.toggle("active", x === "en")
+        }
+        th.onclick = () => setLang("th");
+        en.onclick = () => setLang("en");
+        setLang(lang);
+
+        registerForm.onsubmit = async e => {
+            e.preventDefault();
+            msg.textContent = "";
+
+            const nameInput = document.getElementById("name").value;
+            const roleInput = document.getElementById("role").value;
+            const emailInput = document.getElementById("email").value;
+            const passInput = document.getElementById("password").value;
+            const confirmInput = document.getElementById("confirm").value;
+
+            // ตรวจสอบรหัสผ่านว่าตรงกันหรือไม่
+            if (passInput !== confirmInput) {
+                msg.style.color = "#d93025";
+                msg.textContent = t[lang].mismatch;
+                return;
+            }
+
+            try {
+                // ยิง API ไปยัง Node.js Backend เพื่อบันทึกลง DynamoDB
+                const response = await fetch("/api/register", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        email: emailInput,
+                        password: passInput,
+                        name: nameInput,
+                        role: roleInput
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    msg.style.color = "#4b7343";
+                    msg.textContent = t[lang].ok;
+                    setTimeout(() => location.href = "index.html", 1000);
+                } else {
+                    msg.style.color = "#d93025";
+                    msg.textContent = data.message || t[lang].err;
+                }
+            } catch (err) {
+                console.error(err);
+                msg.style.color = "#d93025";
+                msg.textContent = t[lang].err;
+            }
+        };
+    </script>
+</body>
+
+</html>
