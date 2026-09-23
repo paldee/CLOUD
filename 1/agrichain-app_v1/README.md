@@ -1,106 +1,97 @@
 ﻿# 🌿 AgriChain — Agricultural Supply Chain Intelligence Platform
 
-> ระบบจัดการห่วงโซ่อุปทานการเกษตรอัจฉริยะ พัฒนาบน AWS Cloud  
-> **Clone repo นี้เดียวแล้วรันได้ทั้งระบบ**
+> ระบบจัดการห่วงโซ่อุปทานการเกษตรอัจฉริยะ พัฒนาบน AWS Cloud
 
 ---
 
-## 🏗️ Architecture
+## 💡 ระบบนี้ทำงานอย่างไร?
+
+ผู้ใช้เห็นเพียง **เว็บเดียว** ที่ `http://IP:3000` แต่เบื้องหลังมีสองส่วนทำงานร่วมกัน:
 
 ```
-Browser → EC2 (Node.js :3000) ─── /api/login  ──→ DynamoDB
-                               ─── /api/upload ──→ S3 Bucket
-                               ─── /api/chat   ──→ FastAPI AI (:8000)
-                                                        ↓
-                                              PostgreSQL / Athena
+ผู้ใช้ (Browser)
+     │
+     ▼
+[Node.js :3000]  ← เว็บทั้งหมด: login, dashboard, upload, หน้า AI
+     │
+     │  เฉพาะหน้า AI → ส่งคำถามต่อให้
+     ▼
+[Python FastAPI :8000]  ← "สมอง" AI ที่คิดคำตอบจาก LLM + Database
 ```
+
+| ส่วน | หน้าที่ | Port |
+|------|---------|------|
+| `server.js` (Node.js) | Login, Dashboard, Upload CSV, serve หน้าเว็บทุกหน้า | 3000 |
+| `app/main.py` (Python) | AI Engine — ประมวลผลคำถาม → SQL → คำตอบ | 8000 |
+
+> **หน้า `agent.html` คือหน้าเว็บปกติ** — แต่เมื่อผู้ใช้ถามคำถาม  
+> Node.js จะ "ส่งต่อ" ไปให้ Python AI ตอบ แล้วนำคำตอบกลับมาแสดง
+
+---
 
 ## 📁 Project Structure
 
 ```
 agrichain-app_v1/
-├── server.js           # Node.js Express backend (Port 3000)
-├── package.json
-├── .env.example        # Template สำหรับ environment variables
+├── server.js           # Node.js web server (Port 3000)
+├── package.json        # Node.js dependencies
 │
-├── public/             # Frontend (HTML/CSS/JS)
-│   ├── index.html      # Login page
-│   ├── login.js        # Login handler → DynamoDB
-│   ├── dashboard.html  # Dashboard
-│   ├── agent.html      # AI Agent chat page
-│   └── register.html
+├── public/             # หน้าเว็บทั้งหมด
+│   ├── index.html      # หน้า Login
+│   ├── login.js        # Login → DynamoDB
+│   ├── dashboard.html  # หน้า Dashboard + Upload CSV
+│   ├── agent.html      # หน้า AI Chat (ติดต่อ Python ผ่าน server.js)
+│   └── register.html   # หน้าสมัครสมาชิก
 │
-├── app/                # Python FastAPI AI Backend (Port 8000)
-│   ├── main.py
+├── app/                # Python AI Engine (Port 8000)
+│   ├── main.py         # FastAPI entry point
 │   ├── agents/         # LLM Agent logic
-│   ├── api/            # API routes
-│   ├── db/             # Database connection
-│   ├── services/       # Query workflow
-│   └── prompts/        # System prompts
+│   ├── db/             # เชื่อมต่อ Database
+│   └── prompts/        # คำสั่งให้ AI
 │
-├── requirements.txt    # Python dependencies
+├── requirements.txt    # Python packages
+├── .env.example        # ตัวอย่าง environment variables
 └── Dockerfile
 ```
 
 ---
 
-## ⚙️ Tech Stack
+## 🚀 Deploy บน EC2
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | HTML, CSS, Vanilla JS |
-| Node.js Backend | Express.js (Port 3000) |
-| Auth | AWS DynamoDB |
-| File Storage | AWS S3 |
-| AI Backend | Python FastAPI + LangGraph (Port 8000) |
-| Database | PostgreSQL / AWS Athena |
-| Hosting | AWS EC2 |
-
----
-
-## 🚀 Deploy on EC2 (ทำตามลำดับ)
-
-### 1. Clone repo
+### ขั้นตอนที่ 1: Clone และ Setup
 
 ```bash
 git clone https://github.com/paldee/CLOUD.git
 cd CLOUD/1/agrichain-app_v1
-```
 
-### 2. ตั้งค่า Environment Variables
-
-```bash
+# สร้าง .env จาก template
 cp .env.example .env
-nano .env
-# ใส่ AWS credentials จาก AWS Academy → AWS Details
+nano .env   # ใส่ AWS credentials จาก AWS Academy
 ```
 
-### 3. เริ่ม Node.js Web App
+### ขั้นตอนที่ 2: ติดตั้ง dependencies
 
 ```bash
+# Node.js
 npm install
-nohup node server.js > logs/node.log 2>&1 &
-# หรือใช้ pm2:
-npm install -g pm2
-pm2 start server.js --name agrichain-web
+
+# Python
+pip install -r requirements.txt
 ```
 
-### 4. เริ่ม Python AI Backend
+### ขั้นตอนที่ 3: รัน (ต้องรันทั้งสองพร้อมกัน)
 
 ```bash
-pip install -r requirements.txt
-nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > logs/python.log 2>&1 &
-# หรือใช้ pm2:
-pm2 start "uvicorn app.main:app --host 0.0.0.0 --port 8000" --name agrichain-ai
+# รันเว็บ (Node.js)
+node server.js &
+
+# รัน AI engine (Python) — ที่หน้า agent.html ต้องใช้
+uvicorn app.main:app --host 0.0.0.0 --port 8000 &
 ```
 
-### 5. ตรวจสอบ EC2 Security Group
+> ถ้ายังไม่ต้องการใช้หน้า AI ก็รันแค่ `node server.js` พอ
 
-เปิด Inbound ports:
-- `3000` (Node.js Web App)
-- `8000` (Python AI Backend)
-
-### 6. เข้าใช้งาน
+### ขั้นตอนที่ 4: เข้าใช้งาน
 
 ```
 http://<EC2_PUBLIC_IP>:3000
@@ -108,7 +99,7 @@ http://<EC2_PUBLIC_IP>:3000
 
 ---
 
-## 👤 Test Accounts (ใน DynamoDB)
+## 👤 บัญชีทดสอบ (ใน DynamoDB)
 
 | Username | Password | Role |
 |----------|----------|------|
@@ -118,16 +109,7 @@ http://<EC2_PUBLIC_IP>:3000
 
 ---
 
-## 🔐 Environment Variables
+## ⚠️ หมายเหตุ AWS Academy
 
-```env
-PORT=3000
-AWS_REGION=us-east-1
-S3_BUCKET_NAME=agri-csv-data-cloud
-DYNAMODB_TABLE=user_login
-AWS_ACCESS_KEY_ID=...
-AWS_SECRET_ACCESS_KEY=...
-AWS_SESSION_TOKEN=...    # AWS Academy token (หมดทุก ~4 ชม.)
-```
-
-> ⚠️ **ห้าม commit `.env` ขึ้น git เด็ดขาด** — ไฟล์นี้ถูก ignore แล้ว
+AWS Session Token **หมดอายุทุก ~4 ชั่วโมง**  
+เมื่อ token หมด ให้ไปที่ AWS Academy → AWS Details → copy credentials ใหม่ใส่ `.env` แล้ว restart `node server.js`
