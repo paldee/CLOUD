@@ -393,9 +393,6 @@
                     </svg>
                     <div class="brand-title">AgriChain</div>
                 </div>
-                <button class="btn-new-order">
-                    <span>+</span><span class="label" data-i18n="newOrder">คำสั่งโลจิสติกส์ใหม่</span>
-                </button>
                 <ul class="nav-menu">
                     <li class="nav-item"><a href="#">
                         <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg></span>
@@ -471,10 +468,6 @@
 
     <script>
         // Language dictionary
-        const T = {
-            th: { newOrder: "คำสั่งโลจิสติกส์ใหม่", dashboard: "แผงควบคุม", supply: "ห่วงโซ่อุปทาน", ai: "ผู้ช่วย AI", warehouse: "คลังสินค้า", help: "ความช่วยเหลือ", account: "บัญชี / ออกจากระบบ", uploadCenter: "ศูนย์อัปโหลดข้อมูล", uploadDesc: "นำเข้าและประมวลผลชุดข้อมูลห่วงโซ่อุปทานอย่างปลอดภัย", drag: "ลากและวางไฟล์ CSV ที่นี่เพื่ออัปโหลดทันที", browse: "หรือคลิกพื้นที่นี้เพื่อเลือกไฟล์จากคอมพิวเตอร์ของคุณ", recent: "อัปโหลดล่าสุด", filename: "ชื่อไฟล์", size: "ขนาด", status: "สถานะ", time: "เวลา", success: "สำเร็จ", progress: "กำลังอัปโหลด...", failed: "ล้มเหลว" },
-            en: { newOrder: "New logistics order", dashboard: "Dashboard", supply: "Supply chain", ai: "AI assistant", warehouse: "Warehouse", help: "Help", account: "Account / Sign out", uploadCenter: "Data upload center", uploadDesc: "Safely import and process supply chain datasets.", drag: "Drag & drop CSV files here to upload instantly", browse: "or click this area to browse from your computer", recent: "Recent uploads", filename: "File name", size: "Size", status: "Status", time: "Time", success: "Completed", progress: "Uploading...", failed: "Failed" }
-        };
 
         let lang = localStorage.getItem("language") || "th";
         function setLang(x) {
