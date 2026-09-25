@@ -8,7 +8,7 @@ const LOGIN_T = {
     th: {
         brandTitle: "ขับเคลื่อนข้อมูลอัจฉริยะใน<br>ห่วงโซ่อุปทานการเกษตร",
         brandDesc:  "จัดการโลจิสติกส์ ติดตามสินค้าคงคลัง และยกระดับการดำเนินงานด้านการเกษตรด้วยข้อมูลอย่างแม่นยำ",
-        welcome:    "ยินดีต้อนรับกลับเข้าสู่ระบบ",
+        welcome:    "ยินดีต้อนรับเข้าสู่ระบบ",
         subtitle:   "กรุณากรอกข้อมูลเพื่อเข้าสู่ระบบ",
         email:      "ชื่อผู้ใช้",
         password:   "รหัสผ่าน",
@@ -27,7 +27,7 @@ const LOGIN_T = {
     en: {
         brandTitle: "Cultivating Intelligence in<br>Global Supply Chains",
         brandDesc:  "Securely manage logistics, track inventory, and optimize agricultural operations with precision data.",
-        welcome:    "Welcome back",
+        welcome:    "Welcome to AgriChain",
         subtitle:   "Please enter your details to sign in",
         email:      "Username",
         password:   "Password",
