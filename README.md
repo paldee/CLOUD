@@ -19,7 +19,6 @@ agrichain-app/
 
 ├── .env
 
-├── login.js
 
 ├── package-lock.json
 
