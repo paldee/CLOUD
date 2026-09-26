@@ -1,72 +1,50 @@
-DATA_WAREHOUSE_SCHEMA = {
-    "fact_harvest": {
-        "description": "รายการรับซื้อผลผลิตจากเกษตรกรเข้าคลัง",
-        "columns": [
-            "harvest_id",
-            "harvest_date_key",
-            "farmer_sk",
-            "crop_sk",
-            "warehouse_sk",
-            "quantity_kg",
-            "price_per_kg",
-            "total_amount_thb",
-            "quality_grade",
-        ],
-        "metrics": ["total_amount_thb", "quantity_kg", "price_per_kg"],
-    },
-    "fact_sales": {
-        "description": "รายการขายผลผลิตให้ลูกค้า",
-        "columns": [
-            "sales_id",
-            "sale_date_key",
-            "customer_sk",
-            "crop_sk",
-            "warehouse_sk",
-            "quantity_kg",
-            "unit_price_thb",
-            "total_amount_thb",
-            "discount_pct",
-            "sale_channel",
-        ],
-        "metrics": ["total_amount_thb", "quantity_kg", "discount_pct"],
-    },
-    "fact_shipment": {
-        "description": "รายการจัดส่งสินค้าไปยังลูกค้า",
-        "columns": [
-            "shipment_id",
-            "shipment_date_key",
-            "delivery_date_key",
-            "customer_sk",
-            "crop_sk",
-            "warehouse_sk",
-            "total_weight_kg",
-            "shipping_cost_thb",
-            "status",
-            "transport_mode",
-        ],
-        "metrics": ["total_weight_kg", "shipping_cost_thb"],
-    },
-    "fact_inventory": {
-        "description": "สถานะสินค้าในคลังรายรอบ",
-        "columns": [
-            "inventory_id",
-            "snapshot_date_key",
-            "warehouse_sk",
-            "crop_sk",
-            "beginning_stock_kg",
-            "received_kg",
-            "sold_kg",
-            "ending_stock_kg",
-            "unit_cost_thb",
-        ],
-        "metrics": ["ending_stock_kg", "received_kg", "sold_kg", "unit_cost_thb"],
-    },
+from typing import Any
+
+
+DATABASE_SCHEMA = "data_warehouse"
+SQL_DIALECT = "PostgreSQL"
+
+
+DATA_WAREHOUSE_SCHEMA: dict[str, dict[str, Any]] = {
     "dim_date": {
-        "description": "มิติเวลา",
+        "description": "ปฏิทินเวลามาตรฐานสำหรับเชื่อมวันที่ของทุก business process",
+        "grain": "1 แถว = 1 วัน",
+        "source": "สร้างจากวันที่ในไฟล์ธุรกรรม",
+        "scd_type": "Type 0 (static / insert only)",
+        "primary_key": "date_key",
+        "foreign_keys": {},
         "columns": ["date_key", "date", "day", "month", "quarter", "year", "weekday"],
+        "column_types": {
+            "date_key": "INTEGER",
+            "date": "DATE",
+            "day": "INTEGER",
+            "month": "INTEGER",
+            "quarter": "INTEGER",
+            "year": "INTEGER",
+            "weekday": "VARCHAR",
+        },
+        "column_descriptions": {
+            "date_key": "คีย์วันที่รูปแบบ YYYYMMDD",
+            "date": "วันที่เต็มรูปแบบ YYYY-MM-DD",
+            "day": "วันในเดือน",
+            "month": "เดือน 1-12",
+            "quarter": "ไตรมาส 1-4",
+            "year": "ปี ค.ศ.",
+            "weekday": "ชื่อวันในสัปดาห์",
+        },
+        "transformations": [
+            "แปลงวันที่ธุรกรรมเป็น date_key รูปแบบ YYYYMMDD",
+            "โหลดแบบ insert-only และไม่แก้ไขข้อมูลย้อนหลัง",
+        ],
     },
     "dim_crop": {
-        "description": "ข้อมูลผลผลิต",
+        "description": "ข้อมูลมิติผลผลิตทางการเกษตร",
+        "grain": "1 แถว = 1 ผลผลิตจากระบบต้นทาง",
+        "source": "Crop.csv",
+        "scd_type": "Type 1 (overwrite)",
+        "primary_key": "crop_sk",
+        "business_key": "crop_id",
+        "foreign_keys": {},
         "columns": [
             "crop_sk",
             "crop_id",
@@ -77,21 +55,93 @@ DATA_WAREHOUSE_SCHEMA = {
             "season_months",
             "shelf_life_days",
         ],
+        "column_types": {
+            "crop_sk": "INTEGER",
+            "crop_id": "VARCHAR",
+            "crop_name": "VARCHAR",
+            "category": "VARCHAR",
+            "unit": "VARCHAR",
+            "standard_price_per_unit": "NUMERIC",
+            "season_months": "VARCHAR",
+            "shelf_life_days": "INTEGER",
+        },
+        "column_descriptions": {
+            "crop_sk": "Surrogate key ของผลผลิต",
+            "crop_id": "รหัสผลผลิตจากระบบต้นทาง",
+            "crop_name": "ชื่อผลผลิต",
+            "category": "หมวดหมู่ผลผลิต",
+            "unit": "หน่วยบรรจุภัณฑ์",
+            "standard_price_per_unit": "ราคามาตรฐานอ้างอิงต่อหน่วย",
+            "season_months": "เดือนที่เป็นฤดูกาลเก็บเกี่ยว",
+            "shelf_life_days": "อายุการเก็บรักษาสูงสุดเป็นวัน",
+        },
+        "transformations": [
+            "สร้าง crop_sk อัตโนมัติ",
+            "ตัดช่องว่างหน้าและหลัง crop_name",
+            "standard_price_per_unit ต้องไม่ติดลบ และแทน NULL ด้วย 0.00",
+            "เมื่อข้อมูลเปลี่ยนให้เขียนทับแถวเดิมตาม SCD Type 1",
+        ],
+        "excluded_source_columns": ["is_active"],
     },
     "dim_warehouse": {
-        "description": "ข้อมูลคลังสินค้า",
+        "description": "ข้อมูลมิติคลังสินค้าและไซโลแบบเก็บชื่อก่อนหน้า 1 ค่า",
+        "grain": "1 แถว = 1 คลังสินค้าจากระบบต้นทาง",
+        "source": "Warehouse.csv",
+        "scd_type": "Type 3 (current and previous value)",
+        "primary_key": "warehouse_sk",
+        "business_key": "warehouse_id",
+        "foreign_keys": {},
         "columns": [
             "warehouse_sk",
             "warehouse_id",
-            "warehouse_name",
+            "previous_warehouse_name",
+            "current_warehouse_name",
             "province",
             "region",
             "capacity_ton",
             "manager_name",
         ],
+        "column_types": {
+            "warehouse_sk": "INTEGER",
+            "warehouse_id": "VARCHAR",
+            "previous_warehouse_name": "VARCHAR",
+            "current_warehouse_name": "VARCHAR",
+            "province": "VARCHAR",
+            "region": "VARCHAR",
+            "capacity_ton": "INTEGER",
+            "manager_name": "VARCHAR",
+        },
+        "column_descriptions": {
+            "warehouse_sk": "Surrogate key ของคลังสินค้า",
+            "warehouse_id": "รหัสคลังสินค้าจากระบบต้นทาง",
+            "previous_warehouse_name": "ชื่อคลังสินค้าก่อนหน้า",
+            "current_warehouse_name": "ชื่อคลังสินค้าปัจจุบัน",
+            "province": "จังหวัดที่ตั้งคลังสินค้า",
+            "region": "ภูมิภาค",
+            "capacity_ton": "ความจุสูงสุดของคลังเป็นตัน",
+            "manager_name": "ชื่อผู้จัดการคลังสินค้า",
+        },
+        "transformations": [
+            "สร้าง warehouse_sk อัตโนมัติ",
+            "เมื่อชื่อคลังเปลี่ยน ย้ายชื่อเดิมไป previous_warehouse_name และเก็บชื่อใหม่ใน current_warehouse_name",
+            "capacity_ton ต้องไม่เป็น NULL และต้องไม่ติดลบ",
+            "ตัดช่องว่างหน้าและหลัง manager_name",
+        ],
+        "excluded_source_columns": [
+            "address",
+            "current_utilization_pct",
+            "contact_phone",
+            "is_active",
+        ],
     },
     "dim_farmer": {
-        "description": "ข้อมูลเกษตรกรแบบ SCD Type 2",
+        "description": "ข้อมูลมิติเกษตรกรแบบเก็บประวัติการเปลี่ยนแปลง",
+        "grain": "1 แถว = 1 เวอร์ชันของเกษตรกรในช่วง valid_from ถึง valid_to",
+        "source": "Farmer.csv",
+        "scd_type": "Type 2 (full history)",
+        "primary_key": "farmer_sk",
+        "business_key": "farmer_id",
+        "foreign_keys": {},
         "columns": [
             "farmer_sk",
             "farmer_id",
@@ -105,9 +155,56 @@ DATA_WAREHOUSE_SCHEMA = {
             "valid_to",
             "is_current",
         ],
+        "column_types": {
+            "farmer_sk": "INTEGER",
+            "farmer_id": "VARCHAR",
+            "farmer_name": "VARCHAR",
+            "province": "VARCHAR",
+            "region": "VARCHAR",
+            "cooperative": "VARCHAR",
+            "farm_size_rai": "NUMERIC",
+            "primary_crop": "VARCHAR",
+            "valid_from": "DATE",
+            "valid_to": "DATE",
+            "is_current": "BOOLEAN",
+        },
+        "column_descriptions": {
+            "farmer_sk": "Surrogate key ของเวอร์ชันเกษตรกร",
+            "farmer_id": "รหัสเกษตรกรจากระบบต้นทาง",
+            "farmer_name": "ชื่อและนามสกุลเกษตรกร",
+            "province": "จังหวัดภูมิลำเนา",
+            "region": "ภูมิภาค",
+            "cooperative": "สหกรณ์ต้นสังกัด",
+            "farm_size_rai": "ขนาดพื้นที่เพาะปลูกเป็นไร่",
+            "primary_crop": "ผลผลิตหลักที่เพาะปลูก",
+            "valid_from": "วันที่เริ่มใช้ข้อมูลเวอร์ชันนี้",
+            "valid_to": "วันที่สิ้นสุดการใช้ข้อมูลเวอร์ชันนี้",
+            "is_current": "ระบุว่าเป็นเวอร์ชันปัจจุบันหรือไม่",
+        },
+        "transformations": [
+            "สร้าง farmer_sk อัตโนมัติ",
+            "ตัดช่องว่างหน้าและหลัง farmer_name",
+            "farm_size_rai ต้องไม่เป็น NULL",
+            "แถวใหม่ใช้ valid_from เป็นวันที่รัน, valid_to เป็น 9999-12-31 และ is_current เป็น true",
+            "เมื่อข้อมูลเปลี่ยนให้ปิดเวอร์ชันเดิมและสร้างแถวใหม่ตาม SCD Type 2",
+        ],
+        "excluded_source_columns": [
+            "national_id",
+            "district",
+            "registration_date",
+            "status",
+            "phone",
+        ],
+        "sensitive_source_columns": ["national_id", "phone"],
     },
     "dim_customer": {
-        "description": "ข้อมูลลูกค้าแบบ SCD Type 2",
+        "description": "ข้อมูลมิติลูกค้าและคู่ค้าแบบเก็บประวัติการเปลี่ยนแปลง",
+        "grain": "1 แถว = 1 เวอร์ชันของลูกค้าในช่วง valid_from ถึง valid_to",
+        "source": "Customer.csv",
+        "scd_type": "Type 2 (full history)",
+        "primary_key": "customer_sk",
+        "business_key": "customer_id",
+        "foreign_keys": {},
         "columns": [
             "customer_sk",
             "customer_id",
@@ -120,14 +217,319 @@ DATA_WAREHOUSE_SCHEMA = {
             "valid_to",
             "is_current",
         ],
+        "column_types": {
+            "customer_sk": "INTEGER",
+            "customer_id": "VARCHAR",
+            "customer_name": "VARCHAR",
+            "customer_type": "VARCHAR",
+            "province": "VARCHAR",
+            "region": "VARCHAR",
+            "credit_limit_thb": "NUMERIC",
+            "valid_from": "DATE",
+            "valid_to": "DATE",
+            "is_current": "BOOLEAN",
+        },
+        "column_descriptions": {
+            "customer_sk": "Surrogate key ของเวอร์ชันลูกค้า",
+            "customer_id": "รหัสลูกค้าจากระบบต้นทาง",
+            "customer_name": "ชื่อบริษัทหรือชื่อลูกค้า",
+            "customer_type": "ประเภทลูกค้า",
+            "province": "จังหวัดที่ตั้งลูกค้า",
+            "region": "ภูมิภาค",
+            "credit_limit_thb": "วงเงินเครดิตที่อนุมัติเป็นบาท",
+            "valid_from": "วันที่เริ่มใช้ข้อมูลเวอร์ชันนี้",
+            "valid_to": "วันที่สิ้นสุดการใช้ข้อมูลเวอร์ชันนี้",
+            "is_current": "ระบุว่าเป็นเวอร์ชันปัจจุบันหรือไม่",
+        },
+        "transformations": [
+            "สร้าง customer_sk อัตโนมัติ",
+            "ตัดช่องว่างหน้าและหลัง customer_name",
+            "แทน credit_limit_thb ที่เป็น NULL ด้วย 0.00",
+            "แถวใหม่ใช้ valid_from เป็นวันที่รัน, valid_to เป็น 9999-12-31 และ is_current เป็น true",
+            "เมื่อข้อมูลเปลี่ยนให้ปิดเวอร์ชันเดิมและสร้างแถวใหม่ตาม SCD Type 2",
+        ],
+        "excluded_source_columns": ["contact_person", "phone", "email", "is_active"],
+        "sensitive_source_columns": ["contact_person", "phone", "email"],
+    },
+    "fact_harvest": {
+        "description": "รายการรับซื้อผลผลิตจากเกษตรกรเข้าคลัง",
+        "grain": "1 แถว = 1 รายการรับซื้อผลผลิต",
+        "source": "Harvest.csv",
+        "primary_key": "harvest_id",
+        "foreign_keys": {
+            "harvest_date_key": "dim_date.date_key",
+            "farmer_sk": "dim_farmer.farmer_sk",
+            "crop_sk": "dim_crop.crop_sk",
+            "warehouse_sk": "dim_warehouse.warehouse_sk",
+        },
+        "columns": [
+            "harvest_id",
+            "harvest_date_key",
+            "farmer_sk",
+            "crop_sk",
+            "warehouse_sk",
+            "quantity_kg",
+            "price_per_kg",
+            "total_amount_thb",
+            "quality_grade",
+        ],
+        "column_types": {
+            "harvest_id": "VARCHAR",
+            "harvest_date_key": "INTEGER",
+            "farmer_sk": "INTEGER",
+            "crop_sk": "INTEGER",
+            "warehouse_sk": "INTEGER",
+            "quantity_kg": "NUMERIC",
+            "price_per_kg": "NUMERIC",
+            "total_amount_thb": "NUMERIC",
+            "quality_grade": "VARCHAR",
+        },
+        "column_descriptions": {
+            "harvest_id": "รหัสรายการรับซื้อ",
+            "harvest_date_key": "วันที่รับซื้อ",
+            "farmer_sk": "เวอร์ชันเกษตรกรที่สัมพันธ์กับรายการรับซื้อ",
+            "crop_sk": "ผลผลิตที่รับซื้อ",
+            "warehouse_sk": "คลังที่รับผลผลิตเข้า",
+            "quantity_kg": "ปริมาณที่รับซื้อเป็นกิโลกรัม",
+            "price_per_kg": "ราคารับซื้อต่อกิโลกรัม",
+            "total_amount_thb": "ยอดเงินที่จ่ายให้เกษตรกร",
+            "quality_grade": "เกรดคุณภาพผลผลิต A, B หรือ C",
+        },
+        "metrics": ["total_amount_thb", "quantity_kg", "price_per_kg"],
+        "transformations": [
+            "แปลง harvest_date เป็น harvest_date_key รูปแบบ YYYYMMDD",
+            "lookup farmer_sk จาก dim_farmer เวอร์ชันที่ใช้ ณ วันที่รับซื้อ",
+            "quantity_kg และ price_per_kg ต้องไม่เป็น NULL และต้องไม่ติดลบ",
+            "ตรวจสอบ total_amount_thb เทียบกับ quantity_kg * price_per_kg",
+        ],
+        "excluded_source_columns": ["inspector_note"],
+    },
+    "fact_sales": {
+        "description": "รายการขายผลผลิตให้ลูกค้าหรือคู่ค้า",
+        "grain": "1 แถว = 1 รายการขาย",
+        "source": "Sales.csv",
+        "primary_key": "sales_id",
+        "foreign_keys": {
+            "sale_date_key": "dim_date.date_key",
+            "customer_sk": "dim_customer.customer_sk",
+            "crop_sk": "dim_crop.crop_sk",
+            "warehouse_sk": "dim_warehouse.warehouse_sk",
+        },
+        "columns": [
+            "sales_id",
+            "sale_date_key",
+            "customer_sk",
+            "crop_sk",
+            "warehouse_sk",
+            "quantity_kg",
+            "unit_price_thb",
+            "total_amount_thb",
+            "discount_pct",
+            "sale_channel",
+        ],
+        "column_types": {
+            "sales_id": "VARCHAR",
+            "sale_date_key": "INTEGER",
+            "customer_sk": "INTEGER",
+            "crop_sk": "INTEGER",
+            "warehouse_sk": "INTEGER",
+            "quantity_kg": "NUMERIC",
+            "unit_price_thb": "NUMERIC",
+            "total_amount_thb": "NUMERIC",
+            "discount_pct": "NUMERIC",
+            "sale_channel": "VARCHAR",
+        },
+        "column_descriptions": {
+            "sales_id": "รหัสรายการขาย",
+            "sale_date_key": "วันที่ขาย",
+            "customer_sk": "เวอร์ชันลูกค้าที่สัมพันธ์กับรายการขาย",
+            "crop_sk": "ผลผลิตที่ขาย",
+            "warehouse_sk": "คลังที่ตัดจ่ายสินค้า",
+            "quantity_kg": "ปริมาณที่ขายเป็นกิโลกรัม",
+            "unit_price_thb": "ราคาขายต่อหน่วย",
+            "total_amount_thb": "ยอดขายรวมก่อนหักส่วนลด",
+            "discount_pct": "เปอร์เซ็นต์ส่วนลด",
+            "sale_channel": "ช่องทางการขาย",
+        },
+        "metrics": ["total_amount_thb", "quantity_kg", "unit_price_thb", "discount_pct"],
+        "derived_metrics": {
+            "net_sales_thb": "total_amount_thb * (1 - COALESCE(discount_pct, 0) / 100.0)"
+        },
+        "transformations": [
+            "แปลง sale_date เป็น sale_date_key รูปแบบ YYYYMMDD",
+            "lookup customer_sk โดยให้วันขายอยู่ในช่วง valid_from ถึง valid_to",
+            "quantity_kg และ unit_price_thb ต้องไม่ติดลบ",
+            "แทน discount_pct ที่เป็น NULL ด้วย 0",
+        ],
+        "excluded_source_columns": ["order_id", "payment_status"],
+    },
+    "fact_shipment": {
+        "description": "รายการจัดส่งผลผลิตจากคลังไปยังลูกค้า",
+        "grain": "1 แถว = 1 รอบการจัดส่ง",
+        "source": "Shipment.csv",
+        "primary_key": "shipment_id",
+        "foreign_keys": {
+            "shipment_date_key": "dim_date.date_key",
+            "delivery_date_key": "dim_date.date_key",
+            "customer_sk": "dim_customer.customer_sk",
+            "crop_sk": "dim_crop.crop_sk",
+            "warehouse_sk": "dim_warehouse.warehouse_sk",
+        },
+        "columns": [
+            "shipment_id",
+            "shipment_date_key",
+            "delivery_date_key",
+            "customer_sk",
+            "crop_sk",
+            "warehouse_sk",
+            "total_weight_kg",
+            "shipping_cost_thb",
+            "status",
+            "transport_mode",
+        ],
+        "column_types": {
+            "shipment_id": "VARCHAR",
+            "shipment_date_key": "INTEGER",
+            "delivery_date_key": "INTEGER",
+            "customer_sk": "INTEGER",
+            "crop_sk": "INTEGER",
+            "warehouse_sk": "INTEGER",
+            "total_weight_kg": "NUMERIC",
+            "shipping_cost_thb": "NUMERIC",
+            "status": "VARCHAR",
+            "transport_mode": "VARCHAR",
+        },
+        "column_descriptions": {
+            "shipment_id": "รหัสรายการจัดส่ง",
+            "shipment_date_key": "วันที่เริ่มจัดส่ง",
+            "delivery_date_key": "วันที่ส่งมอบสำเร็จ",
+            "customer_sk": "ลูกค้าปลายทาง",
+            "crop_sk": "ผลผลิตที่จัดส่ง",
+            "warehouse_sk": "คลังสินค้าต้นทาง",
+            "total_weight_kg": "น้ำหนักรวมที่จัดส่งเป็นกิโลกรัม",
+            "shipping_cost_thb": "ค่าใช้จ่ายในการจัดส่ง",
+            "status": "สถานะการจัดส่ง",
+            "transport_mode": "รูปแบบการขนส่ง",
+        },
+        "metrics": ["total_weight_kg", "shipping_cost_thb"],
+        "transformations": [
+            "แปลง shipment_date เป็น shipment_date_key รูปแบบ YYYYMMDD",
+            "ถ้า delivery_date เป็น NULL ให้ใช้ delivery_date_key = 99991231 มิฉะนั้นแปลงเป็น YYYYMMDD",
+            "delivery_date ต้องไม่เกิดก่อน shipment_date",
+            "total_weight_kg และ shipping_cost_thb ต้องไม่ติดลบ",
+        ],
+        "excluded_source_columns": ["driver_name", "vehicle_plate"],
+    },
+    "fact_inventory": {
+        "description": "บันทึกสถานะสินค้าคงคลังรายรอบ",
+        "grain": "1 แถว = 1 inventory snapshot ต่อคลังและผลผลิต",
+        "source": "Inventory.csv",
+        "primary_key": "inventory_id",
+        "foreign_keys": {
+            "snapshot_date_key": "dim_date.date_key",
+            "warehouse_sk": "dim_warehouse.warehouse_sk",
+            "crop_sk": "dim_crop.crop_sk",
+        },
+        "columns": [
+            "inventory_id",
+            "snapshot_date_key",
+            "warehouse_sk",
+            "crop_sk",
+            "beginning_stock_kg",
+            "received_kg",
+            "sold_kg",
+            "ending_stock_kg",
+            "unit_cost_thb",
+        ],
+        "column_types": {
+            "inventory_id": "VARCHAR",
+            "snapshot_date_key": "INTEGER",
+            "warehouse_sk": "INTEGER",
+            "crop_sk": "INTEGER",
+            "beginning_stock_kg": "NUMERIC",
+            "received_kg": "NUMERIC",
+            "sold_kg": "NUMERIC",
+            "ending_stock_kg": "NUMERIC",
+            "unit_cost_thb": "NUMERIC",
+        },
+        "column_descriptions": {
+            "inventory_id": "รหัสบันทึกคลังสินค้า",
+            "snapshot_date_key": "วันที่บันทึกยอดคงเหลือ",
+            "warehouse_sk": "คลังสินค้า",
+            "crop_sk": "ผลผลิตในคลัง",
+            "beginning_stock_kg": "ยอดสต็อกยกมาต้นรอบ",
+            "received_kg": "ปริมาณที่รับเข้าคลัง",
+            "sold_kg": "ปริมาณที่เบิกหรือขายออก",
+            "ending_stock_kg": "ยอดสต็อกคงเหลือสิ้นรอบ",
+            "unit_cost_thb": "ต้นทุนเฉลี่ยต่อหน่วย",
+        },
+        "metrics": [
+            "beginning_stock_kg",
+            "received_kg",
+            "sold_kg",
+            "ending_stock_kg",
+            "unit_cost_thb",
+        ],
+        "transformations": [
+            "แปลง snapshot_date เป็น snapshot_date_key รูปแบบ YYYYMMDD",
+            "beginning_stock_kg และ ending_stock_kg ต้องไม่ติดลบ",
+            "แทน received_kg และ sold_kg ที่เป็น NULL ด้วย 0",
+            "unit_cost_thb ต้องไม่เป็น NULL และต้องไม่ติดลบ",
+        ],
+        "excluded_source_columns": ["stock_status"],
     },
 }
 
 
 def render_schema_context() -> str:
-    lines: list[str] = []
-    for table_name, table in DATA_WAREHOUSE_SCHEMA.items():
-        columns = ", ".join(table["columns"])
-        lines.append(f"- {table_name}: {table['description']} | columns: {columns}")
-    return "\n".join(lines)
+    """Render the documented warehouse schema for the Text-to-SQL prompt."""
+    lines = [
+        f"DATABASE SCHEMA: {DATABASE_SCHEMA}",
+        f"SQL DIALECT: {SQL_DIALECT}",
+        "Use only the tables and columns listed below.",
+    ]
 
+    for table_name, table in DATA_WAREHOUSE_SCHEMA.items():
+        lines.extend(
+            [
+                "",
+                f"TABLE: {DATABASE_SCHEMA}.{table_name}",
+                f"DESCRIPTION: {table['description']}",
+                f"GRAIN: {table['grain']}",
+                f"PRIMARY KEY: {table['primary_key']}",
+            ]
+        )
+        if business_key := table.get("business_key"):
+            lines.append(f"BUSINESS KEY: {business_key}")
+        if scd_type := table.get("scd_type"):
+            lines.append(f"SCD: {scd_type}")
+
+        foreign_keys = table.get("foreign_keys", {})
+        if foreign_keys:
+            lines.append("FOREIGN KEYS:")
+            lines.extend(f"- {column} -> {target}" for column, target in foreign_keys.items())
+        else:
+            lines.append("FOREIGN KEYS: none")
+
+        lines.append("COLUMNS:")
+        for column in table["columns"]:
+            data_type = table["column_types"][column]
+            description = table["column_descriptions"][column]
+            lines.append(f"- {column} {data_type}: {description}")
+
+        if derived_metrics := table.get("derived_metrics"):
+            lines.append("DERIVED METRICS:")
+            lines.extend(f"- {name} = {expression}" for name, expression in derived_metrics.items())
+
+        lines.append("IMPORTANT RULES:")
+        lines.extend(f"- {rule}" for rule in table.get("transformations", []))
+
+    lines.extend(
+        [
+            "",
+            "SECURITY:",
+            "- Do not query source-only columns that are absent from this catalog.",
+            "- PII such as national_id, phone, email, and contact_person is not available to SQL generation.",
+        ]
+    )
+    return "\n".join(lines)

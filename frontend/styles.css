@@ -185,8 +185,11 @@ button {
 }
 
 .message-assistant {
-  padding: 18px 0 24px;
-  border-bottom: 1px solid var(--line);
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid #ccd8d1;
+  border-radius: 8px;
+  box-shadow: 0 5px 18px rgba(21, 45, 33, 0.06);
 }
 
 .message-heading {
@@ -206,6 +209,81 @@ button {
   margin: 8px 0 0;
   line-height: 1.7;
   white-space: pre-wrap;
+}
+
+.answer-content {
+  white-space: normal;
+}
+
+.answer-content p {
+  margin: 0 0 10px;
+}
+
+.answer-content h3 {
+  margin: 18px 0 7px;
+  color: var(--forest-dark);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.answer-content h3:first-child {
+  margin-top: 4px;
+}
+
+.answer-content ul,
+.answer-content ol {
+  margin: 4px 0 14px;
+  padding-left: 24px;
+}
+
+.answer-content li {
+  padding-left: 3px;
+  line-height: 1.65;
+}
+
+.answer-content li + li {
+  margin-top: 4px;
+}
+
+.answer-content strong {
+  color: #102f22;
+  font-weight: 750;
+}
+
+.answer-content code {
+  padding: 1px 4px;
+  color: #164d34;
+  background: #eaf2ed;
+  border-radius: 3px;
+  font: 0.9em/1.4 Consolas, "Courier New", monospace;
+}
+
+.chart-panel {
+  margin: 20px 0 4px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.chart-panel h3 {
+  margin: 0 0 12px;
+  color: var(--forest-dark);
+  font-size: 14px;
+}
+
+.chart-frame {
+  position: relative;
+  width: 100%;
+  height: 300px;
+  padding: 12px 8px 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.chart-panel figcaption {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .status-badge {
@@ -269,10 +347,28 @@ button {
   font: 12px/1.6 Consolas, "Courier New", monospace;
 }
 
-.sources {
-  margin: 12px 0 0;
+.sql-panel code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.message-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 16px;
+  margin-top: 12px;
+}
+
+.sources,
+.response-time {
+  margin: 0;
   color: var(--muted);
   font-size: 12px;
+}
+
+.response-time {
+  font-variant-numeric: tabular-nums;
 }
 
 .composer {
@@ -305,7 +401,7 @@ button {
 }
 
 .send-button {
-  min-width: 96px;
+  min-width: 174px;
   min-height: 42px;
   padding: 9px 16px;
   color: #ffffff;
@@ -383,5 +479,9 @@ button {
 
   .send-button {
     width: 100%;
+  }
+
+  .chart-frame {
+    height: 240px;
   }
 }

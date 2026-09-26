@@ -5,12 +5,26 @@ export interface AskRequest {
   user_role?: string | null;
 }
 
+export interface ChartDataset {
+  label: string;
+  data: Array<number | null>;
+}
+
+export interface ChartSpec {
+  type: "bar" | "line";
+  title: string;
+  labels: string[];
+  datasets: ChartDataset[];
+  total_points: number;
+}
+
 export interface AskResponse {
   answer: string;
   sql: string | null;
   sources: string[];
   status: AgentStatus;
   guardrail_violations: string[];
+  visualization: ChartSpec | null;
 }
 
 export interface HealthResponse {

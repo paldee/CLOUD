@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="dashboardTitle">AgriChain - คลังข้อมูล</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            background: #EDE8DC;
+            color: #1D1C14;
+            overflow-x: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            width: 100vw;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 250px;
+            min-width: 250px;
+            background: #F4F0E6;
+            border-right: 1px solid rgba(128, 85, 50, .10);
+            padding: 24px 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: all 0.3s ease;
+            z-index: 5;
+        }
+
+        .brand-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+            padding-left: 6px;
+        }
+
+        .brand-logo {
+            width: 26px;
+            height: 26px;
+            color: #546341;
+            flex-shrink: 0;
+        }
+
+        .brand-title {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: #805532;
+            line-height: 1.1;
+        }
+
+        .nav-menu, .sidebar-bottom {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            list-style: none;
+        }
+
+        .nav-item a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            color: #546341;
+            text-decoration: none;
+            font-size: .9rem;
+            font-weight: 500;
+            border-radius: 8px;
+            white-space: nowrap;
+            transition: background 0.2s;
+        }
+
+        .nav-item.active a {
+            background: #D7E5B6;
+            color: #546341;
+            font-weight: 600;
+        }
+
+        .nav-item a:hover {
+            background: rgba(215, 229, 182, .55);
+        }
+
+        .nav-icon {
+            width: 20px;
+            height: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .nav-icon svg {
+            width: 18px;
+            height: 18px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .sidebar-bottom {
+            border-top: 1px solid rgba(128, 85, 50, .10);
+            padding-top: 16px;
+        }
+
+        /* Main Area */
+        .main-content {
+            flex: 1;
+            min-width: 0;
+            padding: 36px 5%;
+            background: #F8F3E7;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            overflow-y: auto;
+            width: 100%;
+        }
+
+        .page-header h1 {
+            font-size: 1.8rem;
+            line-height: 1.2;
+            color: #805532;
+            margin-bottom: 6px;
+        }
+
+        .page-header p {
+            font-size: .95rem;
+            color: #5E674C;
+        }
+
+        /* Auto-Upload Dropzone */
+        .upload-card {
+            width: 100%;
+            min-height: 280px;
+            padding: 40px 24px;
+            background: #E8EED2;
+            border: 2px dashed #A5B68D;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .upload-card.dragover {
+            background: #dce7be;
+            border-color: #805532;
+            transform: scale(0.995);
+        }
+
+        .upload-icon-box {
+            width: 72px;
+            height: 72px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #8B5A35;
+        }
+
+        .upload-icon-box svg {
+            width: 58px;
+            height: 58px;
+            fill: none;
+            stroke: #8B5A35;
+            stroke-width: 5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .upload-title {
+            margin-bottom: 6px;
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #8B5A35;
+        }
+
+        .upload-subtitle {
+            font-size: .92rem;
+            color: #5E674C;
+        }
+
+        .file-input-hidden {
+            display: none;
+        }
+
+        /* Recent Card */
+        .recent-card {
+            width: 100%;
+            padding: 24px 28px;
+            background: #F8F3E7;
+            border: 1px solid rgba(128, 85, 50, .12);
+            border-radius: 16px;
+        }
+
+        .recent-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 18px;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .recent-header h3 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #805532;
+            margin: 0;
+        }
+
+        .search-box {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .search-box input {
+            padding: 6px 12px 6px 34px;
+            border: 1px solid rgba(128, 85, 50, 0.25);
+            border-radius: 8px;
+            background-color: #F8F3E7;
+            color: #1D1C14;
+            font-size: 0.85rem;
+            outline: none;
+            transition: all 0.2s ease;
+            width: 220px;
+        }
+
+        .search-box input:focus {
+            border-color: #805532;
+            box-shadow: 0 0 0 2px rgba(128, 85, 50, 0.15);
+            background-color: #FFFFFF;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 10px;
+            width: 16px;
+            height: 16px;
+            fill: none;
+            stroke: #805532;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            pointer-events: none;
+        }
+
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        .data-table {
+            width: 100%;
+            min-width: 600px;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: .88rem;
+        }
+
+        .data-table th {
+            padding: 10px 8px;
+            color: #546341;
+            font-size: .85rem;
+            font-weight: 600;
+            border-bottom: 1px solid rgba(84, 99, 65, .16);
+        }
+
+        .data-table td {
+            padding: 14px 8px;
+            color: #4E5841;
+            border-bottom: 1px solid rgba(84, 99, 65, .08);
+        }
+
+        .file-icon {
+            width: 18px;
+            height: 18px;
+            display: inline-block;
+            vertical-align: -3px;
+            margin-right: 8px;
+            color: #8B5A35;
+        }
+
+        .file-icon svg {
+            width: 100%;
+            height: 100%;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2;
+        }
+
+        /* สไตล์ชื่อไฟล์แบบกดได้ */
+        .file-link {
+            color: #805532;
+            font-weight: 600;
+            text-decoration: underline;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .file-link:hover {
+            color: #546341;
+        }
+
+        .badge {
+            padding: 5px 12px;
+            border-radius: 14px;
+            font-size: .75rem;
+            display: inline-block;
+            font-weight: 600;
+        }
+
+        .badge-success { background: #D7E5B6; color: #3c4d28; }
+        .badge-progress { background: #F1DFA5; color: #6d5012; }
+        .badge-error { background: #F2B4B4; color: #7C2222; }
+
+        .btn-delete, .btn-preview, .btn-action {
+            background-color: #F8F3E7;
+            color: #4A5835;
+            border: none;
+            padding: 6px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, transform 0.1s;
+            flex-shrink: 0;
+        }
+
+        .btn-delete:hover, .btn-preview:hover, .btn-action:hover {
+            background-color: #e8e0ce;
+            transform: scale(1.05);
+        }
+
+        .btn-preview {
+            color: #805532;
+        }
+
+        .btn-preview:hover {
+            color: #546341;
+        }
+
+        .btn-delete svg, .btn-preview svg, .btn-action svg {
+            width: 18px;
+            height: 18px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        /* Language Switch */
+        .language-switch {
+            position: fixed;
+            right: 24px;
+            top: 20px;
+            display: flex;
+            background: #F8F3E7;
+            border: 1px solid rgba(128, 85, 50, .2);
+            border-radius: 20px;
+            padding: 3px;
+            z-index: 10;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .language-switch button {
+            border: 0;
+            background: transparent;
+            padding: 4px 12px;
+            border-radius: 16px;
+            cursor: pointer;
+            color: #546341;
+            font-weight: 500;
+        }
+
+        .language-switch .active {
+            background: #D7E5B6;
+            color: #805532;
+            font-weight: 700;
+        }
+
+        /* Modal Pop-up */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(3px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #F8F3E7;
+            width: 90%;
+            max-width: 850px;
+            max-height: 80vh;
+            border-radius: 16px;
+            border: 1px solid rgba(128, 85, 50, 0.2);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            animation: modalFadeIn 0.2s ease-out;
+        }
+
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .modal-header {
+            padding: 16px 20px;
+            background: #E8EED2;
+            border-bottom: 1px solid rgba(128, 85, 50, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .modal-header h3 {
+            font-size: 1.1rem;
+            color: #805532;
+            word-break: break-all;
+        }
+
+        .modal-close {
+            background: transparent;
+            border: none;
+            font-size: 1.8rem;
+            line-height: 1;
+            color: #805532;
+            cursor: pointer;
+            padding: 0 4px;
+        }
+
+        .modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            overflow-x: auto;
+        }
+
+        .csv-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        .csv-table th, .csv-table td {
+            padding: 8px 12px;
+            border: 1px solid rgba(128, 85, 50, 0.15);
+            text-align: left;
+        }
+
+        .csv-table th {
+            background-color: #D7E5B6;
+            color: #3c4d28;
+            font-weight: 600;
+        }
+
+        .csv-table tr:nth-child(even) {
+            background-color: rgba(215, 229, 182, 0.2);
+        }
+
+        @media(max-width: 900px) {
+            .sidebar {
+                width: 72px;
+                min-width: 72px;
+                padding: 18px 8px;
+                align-items: center;
+            }
+
+            .brand-title, .nav-item .label {
+                display: none;
+            }
+
+            .brand-header {
+                padding-left: 0;
+                justify-content: center;
+            }
+
+            .nav-item a {
+                justify-content: center;
+                padding: 10px 0;
+            }
+
+            .main-content {
+                padding: 24px 20px;
+            }
+        }
+
+        @media(max-width: 580px) {
+            .language-switch {
+                top: 10px;
+                right: 10px;
+            }
+            .search-box input {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="language-switch">
+        <button id="thBtn" class="active">ไทย</button>
+        <button id="enBtn">EN</button>
+    </div>
+
+    <div class="app-container">
+        <aside class="sidebar">
+            <div>
+                <div class="brand-header">
+                    <svg class="brand-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 4C12 4 5 8 3 20c8-1 15-6 18-16Z" />
+                        <path d="M4 19c4-5 8-8 14-11" />
+                    </svg>
+                    <div class="brand-title">AgriChain</div>
+                </div>
+                <ul class="nav-menu">
+                    <li class="nav-item"><a href="#">
+                        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg></span>
+                        <span class="label" data-i18n="dashboard">Dashboard</span>
+                    </a></li>
+                    <li class="nav-item active"><a href="/dashboard.html">
+                        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 19V9"/><path d="M12 19V5"/><path d="M19 19v-7"/></svg></span>
+                        <span class="label" data-i18n="supply">คลังข้อมูล</span>
+                    </a></li>
+                    <li class="nav-item"><a href="/agent.html">
+                        <span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="13" rx="3"/><path d="M9 7V5h6v2"/><circle cx="9" cy="13" r="1"/><circle cx="15" cy="13" r="1"/><path d="M9 17h6"/></svg></span>
+                        <span class="label" data-i18n="ai">ผู้ช่วย AI</span>
+                    </a></li>
+                </ul>
+            </div>
+            <ul class="sidebar-bottom">
+                <li class="nav-item">
+                    <a href="index.html" id="accountBtn">
+                        <span class="nav-icon">👤</span>
+                        <span class="label" data-i18n="account">บัญชี / ออกจากระบบ</span>
+                    </a>
+                </li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <header class="page-header">
+                <h1 data-i18n="uploadCenter">คลังข้อมูล</h1>
+                <p data-i18n="uploadDesc">นำเข้าและประมวลผลชุดข้อมูลห่วงโซ่อุปทานอย่างปลอดภัย</p>
+            </header>
+
+            <section class="upload-card" id="dropZone">
+                <input type="file" id="fileInput" class="file-input-hidden" accept=".csv" multiple />
+                <div class="upload-icon-box" aria-hidden="true">
+                    <svg viewBox="0 0 64 64">
+                        <path d="M16 7h25l12 12v38H16z"></path>
+                        <path d="M41 7v14h12"></path>
+                        <path d="M32 48V29"></path>
+                        <path d="M23 38l9-9 9 9"></path>
+                    </svg>
+                </div>
+                <h2 class="upload-title" data-i18n="drag">ลากและวางไฟล์ CSV ที่นี่เพื่ออัปโหลดทันที</h2>
+                <p class="upload-subtitle" data-i18n="browse">หรือคลิกพื้นที่นี้เพื่อเลือกไฟล์จากคอมพิวเตอร์ของคุณ</p>
+            </section>
+
+            <section class="recent-card">
+                <div class="recent-header">
+                    <h3 data-i18n="recent">อัปโหลดล่าสุด</h3>
+                    <div class="search-box">
+                        <svg class="search-icon" viewBox="0 0 24 24">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input type="text" id="fileSearchInput" placeholder="ค้นหาชื่อไฟล์..." data-i18n-placeholder="searchPlaceholder" onkeyup="filterFiles()" />
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th data-i18n="filename">ชื่อไฟล์</th>
+                                <th data-i18n="size">ขนาด</th>
+                                <th data-i18n="status">สถานะ</th>
+                                <th data-i18n="time">เวลา</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal สำหรับแสดงข้อมูลใน CSV -->
+    <div id="fileModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">ชื่อไฟล์</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+            </div>
+        </div>
+    </div>
+ 
+    <script src="i18next.min.js"></script>
+    <script src="translations.js"></script>
+    <script>
+        const previewIconSvg = `
+            <svg viewBox="0 0 24 24">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+            </svg>
+        `;
+
+        const trashIconSvg = `
+            <svg viewBox="0 0 24 24">
+                <path d="M3 6h18"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                <line x1="10" y1="11" x2="10" y2="17"/>
+                <line x1="14" y1="11" x2="14" y2="17"/>
+            </svg>
+        `;
+
+        const dropZone = document.getElementById("dropZone");
+        const fileInput = document.getElementById("fileInput");
+        const recentTableBody = document.getElementById("recentTableBody");
+
+        dropZone.addEventListener("click", () => fileInput.click());
+
+        fileInput.addEventListener("change", (e) => {
+            if (e.target.files.length > 0) {
+                processFiles(Array.from(e.target.files));
+                fileInput.value = '';
+            }
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.add('dragover');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove('dragover');
+            }, false);
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = Array.from(dt.files);
+            if (files.length > 0) {
+                processFiles(files);
+            }
+        });
+
+        function processFiles(files) {
+            const csvFiles = files.filter(f => f.name.endsWith('.csv'));
+
+            if (csvFiles.length === 0) {
+                alert(window.t('onlyCsvAlert'));
+                return;
+            }
+
+            csvFiles.forEach(file => {
+                uploadFileAutomatically(file);
+            });
+        }
+
+        window._fileCache = window._fileCache || {};
+        window._lastPreviewed = null;
+
+        function uploadFileAutomatically(file) {
+            window._fileCache[file.name] = file;
+
+            const now = new Date();
+            const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+            const fileSize = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+
+            const tr = document.createElement('tr');
+            tr.dataset.fileName = file.name;
+            
+            tr.innerHTML = `
+                <td class="file-cell" style="cursor: pointer;" onclick="previewFileByName('${escapeJs(file.name)}', '')">
+                    <span class="file-icon" style="cursor: pointer;" title="${window.t('preview')}">
+                        <svg viewBox="0 0 24 24"><path d="M5 3h10l4 4v14H5z"/><path d="M15 3v5h4"/></svg>
+                    </span>
+                    <span class="file-link" data-i18n-title="preview" title="${window.t('preview')} (${file.name})">${escapeHtml(file.name)}</span>
+                </td>
+                <td>${fileSize}</td>
+                <td><span class="badge badge-progress" data-i18n="progress">${window.t('progress')}</span></td>
+                <td>
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                        <span>${timeStr}</span>
+                        <span class="action-area" style="display: inline-flex; align-items: center; gap: 6px;"></span>
+                    </div>
+                </td>
+            `;
+            
+            const emptyRow = document.getElementById('emptyRow');
+            if (emptyRow) emptyRow.remove();
+
+            recentTableBody.insertBefore(tr, recentTableBody.firstChild);
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return res.json();
+            })
+            .then(data => {
+                tr.dataset.s3Key = data.key;
+                const badge = tr.querySelector('.badge');
+                if (badge) {
+                    badge.className = 'badge badge-success';
+                    badge.dataset.i18n = 'success';
+                    badge.textContent = window.t('success');
+                }
+
+                const actionArea = tr.querySelector('.action-area');
+                if (actionArea) {
+                    actionArea.innerHTML = `
+                        <button class="btn-action btn-delete" title="${window.t('delete')}" data-i18n-title="delete" onclick="deleteFile('${data.key}', this)">${trashIconSvg}</button>
+                    `;
+                }
+            })
+            .catch(err => {
+                const badge = tr.querySelector('.badge');
+                if (badge) {
+                    badge.className = 'badge badge-error';
+                    badge.dataset.i18n = 'failed';
+                    badge.textContent = window.t('failed');
+                }
+
+                const actionArea = tr.querySelector('.action-area');
+                if (actionArea) {
+                    actionArea.innerHTML = `
+                        <button class="btn-action btn-delete" title="${window.t('delete')}" data-i18n-title="delete" onclick="this.closest('tr').remove(); checkEmptyTable();">${trashIconSvg}</button>
+                    `;
+                }
+            });
+        }
+
+        // Event delegation สำหรับคลิกดูตัวอย่างไฟล์ในตาราง
+        recentTableBody.addEventListener('click', function(e) {
+            if (e.target.closest('.btn-delete, .action-area')) return;
+
+            const target = e.target.closest('.file-link, .file-icon, td:first-child');
+            if (!target) return;
+            const tr = target.closest('tr');
+            if (!tr) return;
+            const fileName = tr.dataset.fileName;
+            const s3Key = tr.dataset.s3Key;
+            if (fileName) {
+                previewFileByName(fileName, s3Key);
+            }
+        });
+
+        function escapeJs(str) {
+            return (str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        }
+
+        function previewFileByName(fileName, s3Key) {
+            const cleanName = (fileName || '').trim();
+            const cached = window._fileCache?.[cleanName];
+            if (cached) {
+                previewFile(cached, s3Key);
+            } else {
+                previewFile(null, s3Key || cleanName);
+            }
+        }
+
+        // ฟังก์ชันอ่านไฟล์ CSV และเรนเดอร์ใน Modal Pop-up
+        function previewFile(file, s3Key) {
+            const fileName = file ? file.name : (s3Key ? s3Key.split('/').pop() : '');
+            const cleanName = (fileName || '').trim();
+            window._lastPreviewed = { file, s3Key, fileName: cleanName };
+
+            // 1. ถ้ามี File object สดใหม่ในเครื่อง (FileReader)
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    renderCSVTable(file.name, e.target.result);
+                };
+                reader.readAsText(file);
+                return;
+            }
+
+            // 2. ถ้ามีแคชไฟล์ในหน่วยความจำ
+            if (window._fileCache && window._fileCache[cleanName]) {
+                previewFile(window._fileCache[cleanName]);
+                return;
+            }
+
+            // 3. ถ้าต้องดึงจาก AWS S3 หรือ API
+            if (s3Key) {
+                const apiBase = (window.location.port === '3000' || window.location.pathname.startsWith('/api')) ? '' : 'http://localhost:3000';
+                fetch(`${apiBase}/api/file-content?key=${encodeURIComponent(s3Key)}`)
+                    .then(res => {
+                        if (!res.ok) throw new Error('Cannot fetch S3');
+                        return res.text();
+                    })
+                    .then(csvText => {
+                        renderCSVTable(cleanName, csvText);
+                    })
+                    .catch(() => alert(window.t('fetchError')));
+            }
+        }
+
+        function renderCSVTable(fileName, csvContent) {
+            window._lastCSVContent = { fileName, csvContent };
+            const rows = parseCSV(csvContent);
+            if (!rows.length) {
+                document.getElementById("modalTitle").innerText = fileName;
+                document.getElementById("modalBody").innerHTML = `<p style="color: #666; text-align: center; padding: 20px;">${window.t('fileEmpty')}</p>`;
+                document.getElementById("fileModal").classList.add("active");
+                return;
+            }
+
+            const headerRow = rows[0];
+            const dataRows = rows.slice(1);
+            const maxSampleRows = 50;
+            const displayRows = dataRows.slice(0, maxSampleRows);
+            const totalInfo = dataRows.length > maxSampleRows ? `(${window.t('ofTotal')} ${dataRows.length.toLocaleString()} ${window.t('rows')})` : '';
+
+            let infoBar = `
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; padding: 10px 14px; background: rgba(215, 229, 182, 0.45); border-radius: 8px; font-size: 0.88rem; color: #4A5835;">
+                    <div>📊 <strong>${window.t('sampleDataPrefix')}</strong> ${displayRows.length} ${window.t('firstRows')} ${totalInfo}</div>
+                    <div>📋 <strong>${headerRow.length}</strong> ${window.t('columns')}</div>
+                </div>
+            `;
+
+            let tableHTML = infoBar + '<div style="overflow-x: auto; max-height: 55vh;"><table class="csv-table"><thead><tr>';
+            headerRow.forEach((col, idx) => {
+                tableHTML += `<th>#${idx + 1} ${escapeHtml(col.trim())}</th>`;
+            });
+            tableHTML += '</tr></thead><tbody>';
+
+            displayRows.forEach((row, rowIndex) => {
+                tableHTML += '<tr>';
+                row.forEach(cell => {
+                    tableHTML += `<td>${escapeHtml((cell || '').trim())}</td>`;
+                });
+                tableHTML += '</tr>';
+            });
+
+            tableHTML += '</tbody></table></div>';
+
+            document.getElementById("modalTitle").innerText = `${window.t('modalFilePrefix')}${fileName}`;
+            document.getElementById("modalBody").innerHTML = tableHTML;
+            document.getElementById("fileModal").classList.add("active");
+        }
+
+        function parseCSV(text) {
+            if (!text) return [];
+            const cleanText = text.replace(/^\uFEFF/, '');
+            const lines = cleanText.split(/\r\n|\n/).filter(line => line.trim().length > 0);
+            return lines.map(line => {
+                const row = [];
+                let insideQuotes = false;
+                let entry = '';
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    if (char === '"') {
+                        insideQuotes = !insideQuotes;
+                    } else if (char === ',' && !insideQuotes) {
+                        row.push(entry.trim());
+                        entry = '';
+                    } else {
+                        entry += char;
+                    }
+                }
+                row.push(entry.trim());
+                return row;
+            });
+        }
+
+        function escapeHtml(text) {
+            if (text === null || text === undefined) return '';
+            const div = document.createElement('div');
+            div.innerText = String(text);
+            return div.innerHTML;
+        }
+
+        function closeModal() {
+            document.getElementById("fileModal").classList.remove("active");
+        }
+
+        window.onclick = function(event) {
+            const modal = document.getElementById("fileModal");
+            if (event.target === modal) {
+                closeModal();
+            }
+        };
+
+        window.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+        // Re-render open modal on language change
+        window.addEventListener('appLanguageChanged', () => {
+            const modal = document.getElementById("fileModal");
+            if (modal && modal.classList.contains("active") && window._lastCSVContent) {
+                renderCSVTable(window._lastCSVContent.fileName, window._lastCSVContent.csvContent);
+            }
+        });
+
+        // Confirmation on Sign Out
+        const accountBtn = document.getElementById("accountBtn");
+        if (accountBtn) {
+            accountBtn.addEventListener("click", (e) => {
+                if (!confirm(window.t("logoutConfirm"))) {
+                    e.preventDefault();
+                }
+            });
+        }
+
+        function deleteFile(s3Key, btnElement) {
+            if (!confirm(window.t('deleteConfirm'))) return;
+
+            btnElement.disabled = true;
+            btnElement.style.opacity = '0.5';
+
+            fetch('/api/delete', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ key: s3Key })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    const tr = btnElement.closest('tr');
+                    tr.remove();
+                    checkEmptyTable();
+                } else {
+                    alert(window.t('deleteError') + ': ' + data.message);
+                    btnElement.disabled = false;
+                    btnElement.style.opacity = '1';
+                }
+            })
+            .catch(err => {
+                console.error('Delete error:', err);
+                alert(window.t('deleteError'));
+                btnElement.disabled = false;
+                btnElement.style.opacity = '1';
+            });
+        }
+
+        function filterFiles() {
+            const input = document.getElementById("fileSearchInput");
+            if (!input) return;
+            const filter = input.value.toLowerCase();
+            const rows = recentTableBody.getElementsByTagName("tr");
+
+            for (let i = 0; i < rows.length; i++) {
+                const firstTd = rows[i].getElementsByTagName("td")[0];
+                if (firstTd) {
+                    const fileNameText = firstTd.textContent || firstTd.innerText;
+                    if (fileNameText.toLowerCase().indexOf(filter) > -1) {
+                        rows[i].style.display = "";
+                    } else {
+                        rows[i].style.display = "none";
+                    }
+                }
+            }
+        }
+
+        function renderEmptyState() {
+            if (!recentTableBody.querySelector('tr:not(#emptyRow)')) {
+                recentTableBody.innerHTML = `
+                    <tr id="emptyRow">
+                        <td colspan="4" style="text-align: center; color: #786C5F; padding: 36px 16px; font-size: 0.95rem;">
+                            <span data-i18n="noUploads">${window.t('noUploads')}</span>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        function checkEmptyTable() {
+            if (!recentTableBody.querySelector('tr:not(#emptyRow)')) {
+                renderEmptyState();
+            }
+        }
+
+        function loadInitialFiles() {
+            renderEmptyState();
+        }
+
+        loadInitialFiles();
+    </script>
+</body>
+
+</html>

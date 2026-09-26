@@ -105,7 +105,10 @@ def validate_and_bound_sql(sql: str) -> SQLValidationResult:
         return SQLValidationResult(False, violations=tuple(dict.fromkeys(violations)))
 
     bounded_statement = _apply_row_limit(statement)
-    return SQLValidationResult(True, sql=bounded_statement.sql(dialect="postgres"))
+    return SQLValidationResult(
+        True,
+        sql=bounded_statement.sql(dialect="postgres", pretty=True),
+    )
 
 
 def require_safe_sql(sql: str) -> str:
