@@ -133,10 +133,10 @@ setup.bat
 # LLM Provider (Qwen ผ่าน Groq API)
 LLM_PROVIDER=qwen
 GROQ_MODEL=qwen/qwen3.8-27b
-GROQ_API_KEY=gsk_...
+GROQ_API_KEY=...
 
 # Amazon RDS PostgreSQL
-DATABASE_URL=postgresql+psycopg://agri_dwh_user:agri_dwh_pass@agri-dwh-dbmaster.cjoywc4cd9ok.us-east-1.rds.amazonaws.com:5432/postgres?sslmode=require
+DATABASE_URL=postgresql+psycopg://<USER>:<PASSWORD>@<ENDPOINT>:5432/<DB_NAME>?sslmode=require
 DATABASE_SCHEMA=data_warehouse
 ```
 
