@@ -5,3 +5,5 @@ python-dotenv>=1.0.1
 sqlalchemy>=2.0.32
 psycopg[binary]>=3.2.1
 sqlglot>=25.20.0
+groq>=0.13.0
+

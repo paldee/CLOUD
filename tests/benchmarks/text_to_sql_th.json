@@ -1,0 +1,248 @@
+{
+  "name": "agri_dw_text_to_sql_th_v1",
+  "language": "th",
+  "schema": "data_warehouse",
+  "description": "Project-specific benchmark for Thai natural-language Text-to-SQL.",
+  "cases": [
+    {
+      "id": "E01",
+      "difficulty": "easy",
+      "category": "sales",
+      "question": "ยอดขายรวมก่อนหักส่วนลดทั้งหมดเท่าไร",
+      "expected_tables": ["fact_sales"],
+      "reference_sql": "SELECT SUM(total_amount_thb) AS gross_sales_thb FROM data_warehouse.fact_sales"
+    },
+    {
+      "id": "E02",
+      "difficulty": "easy",
+      "category": "sales",
+      "question": "ยอดขายสุทธิทั้งหมดหลังหักส่วนลดเท่าไร",
+      "expected_tables": ["fact_sales"],
+      "reference_sql": "SELECT SUM(total_amount_thb * (1 - COALESCE(discount_pct, 0) / 100.0)) AS net_sales_thb FROM data_warehouse.fact_sales"
+    },
+    {
+      "id": "E03",
+      "difficulty": "easy",
+      "category": "harvest",
+      "question": "รับซื้อผลผลิตทั้งหมดกี่กิโลกรัม",
+      "expected_tables": ["fact_harvest"],
+      "reference_sql": "SELECT SUM(quantity_kg) AS total_harvest_kg FROM data_warehouse.fact_harvest"
+    },
+    {
+      "id": "E04",
+      "difficulty": "easy",
+      "category": "harvest",
+      "question": "ยอดเงินรับซื้อผลผลิตรวมทั้งหมดเท่าไร",
+      "expected_tables": ["fact_harvest"],
+      "reference_sql": "SELECT SUM(total_amount_thb) AS total_harvest_amount_thb FROM data_warehouse.fact_harvest"
+    },
+    {
+      "id": "E05",
+      "difficulty": "easy",
+      "category": "shipment",
+      "question": "ค่าจัดส่งรวมทั้งหมดเท่าไร",
+      "expected_tables": ["fact_shipment"],
+      "reference_sql": "SELECT SUM(shipping_cost_thb) AS total_shipping_cost_thb FROM data_warehouse.fact_shipment"
+    },
+    {
+      "id": "E06",
+      "difficulty": "easy",
+      "category": "harvest",
+      "question": "ราคารับซื้อเฉลี่ยต่อกิโลกรัมเท่าไร",
+      "expected_tables": ["fact_harvest"],
+      "reference_sql": "SELECT AVG(price_per_kg) AS average_price_per_kg FROM data_warehouse.fact_harvest"
+    },
+    {
+      "id": "E07",
+      "difficulty": "easy",
+      "category": "shipment",
+      "question": "มีรายการจัดส่งทั้งหมดกี่รายการ",
+      "expected_tables": ["fact_shipment"],
+      "reference_sql": "SELECT COUNT(shipment_id) AS shipment_count FROM data_warehouse.fact_shipment"
+    },
+    {
+      "id": "E08",
+      "difficulty": "easy",
+      "category": "shipment",
+      "question": "จำนวนรายการจัดส่งแยกตามสถานะเป็นเท่าไร",
+      "expected_tables": ["fact_shipment"],
+      "reference_sql": "SELECT status, COUNT(shipment_id) AS shipment_count FROM data_warehouse.fact_shipment GROUP BY status ORDER BY shipment_count DESC"
+    },
+    {
+      "id": "E09",
+      "difficulty": "easy",
+      "category": "master_data",
+      "question": "แสดงรายชื่อผลผลิตและหมวดหมู่ทั้งหมด",
+      "expected_tables": ["dim_crop"],
+      "reference_sql": "SELECT crop_name, category FROM data_warehouse.dim_crop ORDER BY crop_name LIMIT 100"
+    },
+    {
+      "id": "E10",
+      "difficulty": "easy",
+      "category": "master_data",
+      "question": "แสดงชื่อคลังปัจจุบันและความจุ เรียงจากความจุมากที่สุด",
+      "expected_tables": ["dim_warehouse"],
+      "reference_sql": "SELECT current_warehouse_name, capacity_ton FROM data_warehouse.dim_warehouse ORDER BY capacity_ton DESC LIMIT 100"
+    },
+    {
+      "id": "M01",
+      "difficulty": "medium",
+      "category": "sales",
+      "question": "ยอดขายสุทธิรายเดือนในปี 2025 เป็นเท่าไร",
+      "expected_tables": ["fact_sales", "dim_date"],
+      "reference_sql": "SELECT d.year, d.month, SUM(s.total_amount_thb * (1 - COALESCE(s.discount_pct, 0) / 100.0)) AS net_sales_thb FROM data_warehouse.fact_sales AS s JOIN data_warehouse.dim_date AS d ON d.date_key = s.sale_date_key WHERE d.year = 2025 GROUP BY d.year, d.month ORDER BY d.month"
+    },
+    {
+      "id": "M02",
+      "difficulty": "medium",
+      "category": "harvest",
+      "question": "ปี 2025 รับซื้อผลผลิตที่มีคำว่าข้าวทั้งหมดกี่กิโลกรัม แยกตามชนิดผลผลิต",
+      "expected_tables": ["fact_harvest", "dim_crop", "dim_date"],
+      "reference_sql": "SELECT c.crop_name, SUM(h.quantity_kg) AS total_harvest_kg FROM data_warehouse.fact_harvest AS h JOIN data_warehouse.dim_crop AS c ON c.crop_sk = h.crop_sk JOIN data_warehouse.dim_date AS d ON d.date_key = h.harvest_date_key WHERE d.year = 2025 AND c.crop_name LIKE '%ข้าว%' GROUP BY c.crop_name ORDER BY total_harvest_kg DESC"
+    },
+    {
+      "id": "M03",
+      "difficulty": "medium",
+      "category": "inventory",
+      "question": "ณ วันที่บันทึกสต็อกล่าสุด คลังไหนมีสินค้าคงเหลือมากที่สุด",
+      "expected_tables": ["fact_inventory", "dim_warehouse"],
+      "reference_sql": "SELECT w.current_warehouse_name, SUM(i.ending_stock_kg) AS ending_stock_kg FROM data_warehouse.fact_inventory AS i JOIN data_warehouse.dim_warehouse AS w ON w.warehouse_sk = i.warehouse_sk WHERE i.snapshot_date_key = (SELECT MAX(snapshot_date_key) FROM data_warehouse.fact_inventory) GROUP BY w.current_warehouse_name ORDER BY ending_stock_kg DESC LIMIT 1"
+    },
+    {
+      "id": "M04",
+      "difficulty": "medium",
+      "category": "sales",
+      "question": "ยอดขายสุทธิของแต่ละภูมิภาคในปี 2025 เป็นเท่าไร",
+      "expected_tables": ["fact_sales", "dim_customer", "dim_date"],
+      "reference_sql": "SELECT c.region, SUM(s.total_amount_thb * (1 - COALESCE(s.discount_pct, 0) / 100.0)) AS net_sales_thb FROM data_warehouse.fact_sales AS s JOIN data_warehouse.dim_customer AS c ON c.customer_sk = s.customer_sk JOIN data_warehouse.dim_date AS d ON d.date_key = s.sale_date_key WHERE d.year = 2025 GROUP BY c.region ORDER BY net_sales_thb DESC"
+    },
+    {
+      "id": "M05",
+      "difficulty": "medium",
+      "category": "sales",
+      "question": "ผลผลิต 5 อันดับแรกที่มียอดขายสุทธิสูงสุดในปี 2025 คืออะไร",
+      "expected_tables": ["fact_sales", "dim_crop", "dim_date"],
+      "reference_sql": "SELECT c.crop_name, SUM(s.total_amount_thb * (1 - COALESCE(s.discount_pct, 0) / 100.0)) AS net_sales_thb FROM data_warehouse.fact_sales AS s JOIN data_warehouse.dim_crop AS c ON c.crop_sk = s.crop_sk JOIN data_warehouse.dim_date AS d ON d.date_key = s.sale_date_key WHERE d.year = 2025 GROUP BY c.crop_name ORDER BY net_sales_thb DESC LIMIT 5"
+    },
+    {
+      "id": "M06",
+      "difficulty": "medium",
+      "category": "shipment",
+      "question": "ระยะเวลาจัดส่งเฉลี่ยกี่วัน แยกตามรูปแบบการขนส่ง",
+      "expected_tables": ["fact_shipment", "dim_date"],
+      "reference_sql": "SELECT s.transport_mode, AVG(dd.date - sd.date) AS average_delivery_days FROM data_warehouse.fact_shipment AS s JOIN data_warehouse.dim_date AS sd ON sd.date_key = s.shipment_date_key JOIN data_warehouse.dim_date AS dd ON dd.date_key = s.delivery_date_key WHERE s.delivery_date_key <> 99991231 GROUP BY s.transport_mode ORDER BY average_delivery_days"
+    },
+    {
+      "id": "M07",
+      "difficulty": "medium",
+      "category": "harvest",
+      "question": "ไตรมาส 2 ปี 2025 แต่ละสหกรณ์ส่งผลผลิตให้เรากี่กิโลกรัม",
+      "expected_tables": ["fact_harvest", "dim_farmer", "dim_date"],
+      "reference_sql": "SELECT f.cooperative, SUM(h.quantity_kg) AS total_harvest_kg FROM data_warehouse.fact_harvest AS h JOIN data_warehouse.dim_farmer AS f ON f.farmer_sk = h.farmer_sk JOIN data_warehouse.dim_date AS d ON d.date_key = h.harvest_date_key WHERE d.year = 2025 AND d.quarter = 2 GROUP BY f.cooperative ORDER BY total_harvest_kg DESC"
+    },
+    {
+      "id": "M08",
+      "difficulty": "medium",
+      "category": "shipment",
+      "question": "จำนวนการจัดส่งแยกตามสถานะและรูปแบบการขนส่งเป็นเท่าไร",
+      "expected_tables": ["fact_shipment"],
+      "reference_sql": "SELECT status, transport_mode, COUNT(shipment_id) AS shipment_count FROM data_warehouse.fact_shipment GROUP BY status, transport_mode ORDER BY status, shipment_count DESC"
+    },
+    {
+      "id": "M09",
+      "difficulty": "medium",
+      "category": "sales",
+      "question": "ยอดขายสุทธิปี 2025 แยกตามช่องทางการขายเป็นเท่าไร",
+      "expected_tables": ["fact_sales", "dim_date"],
+      "reference_sql": "SELECT s.sale_channel, SUM(s.total_amount_thb * (1 - COALESCE(s.discount_pct, 0) / 100.0)) AS net_sales_thb FROM data_warehouse.fact_sales AS s JOIN data_warehouse.dim_date AS d ON d.date_key = s.sale_date_key WHERE d.year = 2025 GROUP BY s.sale_channel ORDER BY net_sales_thb DESC"
+    },
+    {
+      "id": "M10",
+      "difficulty": "medium",
+      "category": "inventory",
+      "question": "มูลค่าสินค้าคงเหลือของแต่ละคลัง ณ วันที่ล่าสุดเป็นเท่าไร",
+      "expected_tables": ["fact_inventory", "dim_warehouse"],
+      "reference_sql": "SELECT w.current_warehouse_name, SUM(i.ending_stock_kg * i.unit_cost_thb) AS inventory_value_thb FROM data_warehouse.fact_inventory AS i JOIN data_warehouse.dim_warehouse AS w ON w.warehouse_sk = i.warehouse_sk WHERE i.snapshot_date_key = (SELECT MAX(snapshot_date_key) FROM data_warehouse.fact_inventory) GROUP BY w.current_warehouse_name ORDER BY inventory_value_thb DESC"
+    },
+    {
+      "id": "H01",
+      "difficulty": "hard",
+      "category": "sales_growth",
+      "question": "เปรียบเทียบยอดขายสุทธิไตรมาส 2 กับไตรมาส 1 ปี 2025 แยกตามผลผลิตและภูมิภาค แล้วเรียงตามอัตราเติบโตสูงสุด",
+      "expected_tables": ["fact_sales", "dim_crop", "dim_customer", "dim_date"],
+      "reference_sql": "SELECT c.crop_name, cu.region, SUM(CASE WHEN d.quarter = 1 THEN s.total_amount_thb * (1 - COALESCE(s.discount_pct, 0) / 100.0) ELSE 0 END) AS q1_net_sales_thb, SUM(CASE WHEN d.quarter = 2 THEN s.total_amount_thb * (1 - COALESCE(s.discount_pct, 0) / 100.0) ELSE 0 END) AS q2_net_sales_thb, 100.0 * (SUM(CASE WHEN d.quarter = 2 THEN s.total_amount_thb * (1 - COALESCE(s.discount_pct, 0) / 100.0) ELSE 0 END) - SUM(CASE WHEN d.quarter = 1 THEN s.total_amount_thb * (1 - COALESCE(s.discount_pct, 0) / 100.0) ELSE 0 END)) / NULLIF(SUM(CASE WHEN d.quarter = 1 THEN s.total_amount_thb * (1 - COALESCE(s.discount_pct, 0) / 100.0) ELSE 0 END), 0) AS growth_pct FROM data_warehouse.fact_sales AS s JOIN data_warehouse.dim_crop AS c ON c.crop_sk = s.crop_sk JOIN data_warehouse.dim_customer AS cu ON cu.customer_sk = s.customer_sk JOIN data_warehouse.dim_date AS d ON d.date_key = s.sale_date_key WHERE d.year = 2025 AND d.quarter IN (1, 2) GROUP BY c.crop_name, cu.region ORDER BY growth_pct DESC"
+    },
+    {
+      "id": "H02",
+      "difficulty": "hard",
+      "category": "sales_growth",
+      "question": "เปรียบเทียบยอดขายสุทธิปี 2025 กับปี 2024 ของแต่ละผลผลิต และเรียงตามอัตราเติบโต",
+      "expected_tables": ["fact_sales", "dim_crop", "dim_date"],
+      "reference_sql": "SELECT c.crop_name, SUM(CASE WHEN d.year = 2024 THEN s.total_amount_thb * (1 - COALESCE(s.discount_pct, 0) / 100.0) ELSE 0 END) AS net_sales_2024, SUM(CASE WHEN d.year = 2025 THEN s.total_amount_thb * (1 - COALESCE(s.discount_pct, 0) / 100.0) ELSE 0 END) AS net_sales_2025, 100.0 * (SUM(CASE WHEN d.year = 2025 THEN s.total_amount_thb * (1 - COALESCE(s.discount_pct, 0) / 100.0) ELSE 0 END) - SUM(CASE WHEN d.year = 2024 THEN s.total_amount_thb * (1 - COALESCE(s.discount_pct, 0) / 100.0) ELSE 0 END)) / NULLIF(SUM(CASE WHEN d.year = 2024 THEN s.total_amount_thb * (1 - COALESCE(s.discount_pct, 0) / 100.0) ELSE 0 END), 0) AS growth_pct FROM data_warehouse.fact_sales AS s JOIN data_warehouse.dim_crop AS c ON c.crop_sk = s.crop_sk JOIN data_warehouse.dim_date AS d ON d.date_key = s.sale_date_key WHERE d.year IN (2024, 2025) GROUP BY c.crop_name ORDER BY growth_pct DESC"
+    },
+    {
+      "id": "H03",
+      "difficulty": "hard",
+      "category": "shipment_sla",
+      "question": "แต่ละภูมิภาคมีสัดส่วนการจัดส่งที่ใช้เวลาไม่เกิน 3 วันกี่เปอร์เซ็นต์",
+      "expected_tables": ["fact_shipment", "dim_customer", "dim_date"],
+      "reference_sql": "SELECT c.region, 100.0 * SUM(CASE WHEN dd.date - sd.date <= 3 THEN 1 ELSE 0 END) / NULLIF(COUNT(s.shipment_id), 0) AS on_time_pct FROM data_warehouse.fact_shipment AS s JOIN data_warehouse.dim_customer AS c ON c.customer_sk = s.customer_sk JOIN data_warehouse.dim_date AS sd ON sd.date_key = s.shipment_date_key JOIN data_warehouse.dim_date AS dd ON dd.date_key = s.delivery_date_key WHERE s.delivery_date_key <> 99991231 GROUP BY c.region ORDER BY on_time_pct DESC"
+    },
+    {
+      "id": "H04",
+      "difficulty": "hard",
+      "category": "harvest",
+      "question": "ราคารับซื้อเฉลี่ยแบบถ่วงน้ำหนักของแต่ละผลผลิตและภูมิภาคเกษตรกรในปี 2025 เป็นเท่าไร",
+      "expected_tables": ["fact_harvest", "dim_crop", "dim_farmer", "dim_date"],
+      "reference_sql": "SELECT c.crop_name, f.region, SUM(h.total_amount_thb) / NULLIF(SUM(h.quantity_kg), 0) AS weighted_price_per_kg FROM data_warehouse.fact_harvest AS h JOIN data_warehouse.dim_crop AS c ON c.crop_sk = h.crop_sk JOIN data_warehouse.dim_farmer AS f ON f.farmer_sk = h.farmer_sk JOIN data_warehouse.dim_date AS d ON d.date_key = h.harvest_date_key WHERE d.year = 2025 GROUP BY c.crop_name, f.region ORDER BY weighted_price_per_kg DESC"
+    },
+    {
+      "id": "H05",
+      "difficulty": "hard",
+      "category": "inventory",
+      "question": "ณ วันที่ล่าสุด สต็อกของแต่ละผลผลิตในแต่ละคลังเพิ่มหรือลดจากต้นรอบกี่กิโลกรัมและกี่เปอร์เซ็นต์",
+      "expected_tables": ["fact_inventory", "dim_crop", "dim_warehouse"],
+      "reference_sql": "SELECT w.current_warehouse_name, c.crop_name, SUM(i.ending_stock_kg - i.beginning_stock_kg) AS stock_change_kg, 100.0 * SUM(i.ending_stock_kg - i.beginning_stock_kg) / NULLIF(SUM(i.beginning_stock_kg), 0) AS stock_change_pct FROM data_warehouse.fact_inventory AS i JOIN data_warehouse.dim_crop AS c ON c.crop_sk = i.crop_sk JOIN data_warehouse.dim_warehouse AS w ON w.warehouse_sk = i.warehouse_sk WHERE i.snapshot_date_key = (SELECT MAX(snapshot_date_key) FROM data_warehouse.fact_inventory) GROUP BY w.current_warehouse_name, c.crop_name ORDER BY stock_change_pct DESC"
+    },
+    {
+      "id": "H06",
+      "difficulty": "hard",
+      "category": "sales",
+      "question": "ปี 2025 ลูกค้าแต่ละประเภทซื้อผลผลิตแต่ละหมวดหมู่เป็นยอดสุทธิเท่าไร และคิดเป็นกี่กิโลกรัม",
+      "expected_tables": ["fact_sales", "dim_customer", "dim_crop", "dim_date"],
+      "reference_sql": "SELECT cu.customer_type, c.category, SUM(s.quantity_kg) AS quantity_kg, SUM(s.total_amount_thb * (1 - COALESCE(s.discount_pct, 0) / 100.0)) AS net_sales_thb FROM data_warehouse.fact_sales AS s JOIN data_warehouse.dim_customer AS cu ON cu.customer_sk = s.customer_sk JOIN data_warehouse.dim_crop AS c ON c.crop_sk = s.crop_sk JOIN data_warehouse.dim_date AS d ON d.date_key = s.sale_date_key WHERE d.year = 2025 GROUP BY cu.customer_type, c.category ORDER BY net_sales_thb DESC"
+    },
+    {
+      "id": "H07",
+      "difficulty": "hard",
+      "category": "discount",
+      "question": "ปี 2025 แต่ละช่องทางการขายให้ส่วนลดเป็นมูลค่ากี่บาท และคิดเป็นกี่เปอร์เซ็นต์ของยอดขายก่อนลด",
+      "expected_tables": ["fact_sales", "dim_date"],
+      "reference_sql": "SELECT s.sale_channel, SUM(s.total_amount_thb) AS gross_sales_thb, SUM(s.total_amount_thb * COALESCE(s.discount_pct, 0) / 100.0) AS discount_amount_thb, 100.0 * SUM(s.total_amount_thb * COALESCE(s.discount_pct, 0) / 100.0) / NULLIF(SUM(s.total_amount_thb), 0) AS discount_share_pct FROM data_warehouse.fact_sales AS s JOIN data_warehouse.dim_date AS d ON d.date_key = s.sale_date_key WHERE d.year = 2025 GROUP BY s.sale_channel ORDER BY discount_amount_thb DESC"
+    },
+    {
+      "id": "H08",
+      "difficulty": "hard",
+      "category": "shipment_cost",
+      "question": "ต้นทุนขนส่งต่อกิโลกรัมแยกตามรูปแบบการขนส่งและภูมิภาคลูกค้าเป็นเท่าไร",
+      "expected_tables": ["fact_shipment", "dim_customer"],
+      "reference_sql": "SELECT s.transport_mode, c.region, SUM(s.shipping_cost_thb) / NULLIF(SUM(s.total_weight_kg), 0) AS shipping_cost_per_kg FROM data_warehouse.fact_shipment AS s JOIN data_warehouse.dim_customer AS c ON c.customer_sk = s.customer_sk GROUP BY s.transport_mode, c.region ORDER BY shipping_cost_per_kg DESC"
+    },
+    {
+      "id": "H09",
+      "difficulty": "hard",
+      "category": "seasonality",
+      "question": "ยอดขายสุทธิของผลผลิตแต่ละชนิดในเดือนที่ตรงกับฤดูกาลเก็บเกี่ยวเป็นเท่าไร",
+      "expected_tables": ["fact_sales", "dim_crop", "dim_date"],
+      "reference_sql": "SELECT c.crop_name, SUM(s.total_amount_thb * (1 - COALESCE(s.discount_pct, 0) / 100.0)) AS in_season_net_sales_thb FROM data_warehouse.fact_sales AS s JOIN data_warehouse.dim_crop AS c ON c.crop_sk = s.crop_sk JOIN data_warehouse.dim_date AS d ON d.date_key = s.sale_date_key WHERE POSITION(',' || d.month || ',' IN ',' || c.season_months || ',') > 0 GROUP BY c.crop_name ORDER BY in_season_net_sales_thb DESC"
+    },
+    {
+      "id": "H10",
+      "difficulty": "hard",
+      "category": "capacity",
+      "question": "ณ วันที่ล่าสุด คลังใดใช้ความจุเกิน 80 เปอร์เซ็นต์ โดยคำนวณจากสต็อกคงเหลือรวม",
+      "expected_tables": ["fact_inventory", "dim_warehouse"],
+      "reference_sql": "SELECT w.current_warehouse_name, w.capacity_ton, SUM(i.ending_stock_kg) AS ending_stock_kg, 100.0 * SUM(i.ending_stock_kg) / NULLIF(w.capacity_ton * 1000.0, 0) AS utilization_pct FROM data_warehouse.fact_inventory AS i JOIN data_warehouse.dim_warehouse AS w ON w.warehouse_sk = i.warehouse_sk WHERE i.snapshot_date_key = (SELECT MAX(snapshot_date_key) FROM data_warehouse.fact_inventory) GROUP BY w.current_warehouse_name, w.capacity_ton HAVING 100.0 * SUM(i.ending_stock_kg) / NULLIF(w.capacity_ton * 1000.0, 0) > 80 ORDER BY utilization_pct DESC"
+    }
+  ]
+}

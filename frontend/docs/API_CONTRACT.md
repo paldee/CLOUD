@@ -11,7 +11,10 @@ Interactive backend documentation is available at `/docs` when FastAPI is runnin
 ```json
 {
   "status": "ok",
-  "env": "local"
+  "env": "local",
+  "llm_provider": "groq",
+  "llm_model": "qwen/qwen3.8-27b",
+  "database_source": "local-postgres"
 }
 ```
 
@@ -38,9 +41,13 @@ Response:
   "sql": "SELECT ... LIMIT 100",
   "sources": ["schema-catalog"],
   "status": "not_configured",
-  "guardrail_violations": []
+  "guardrail_violations": [],
+  "visualization": null
 }
 ```
+
+`visualization` เป็น chart spec ที่สร้างจากแถวผลลัพธ์จริงโดยไม่ให้ LLM สร้างตัวเลข
+และมีค่าเป็น `null` เมื่อผลลัพธ์ไม่เหมาะกับการทำกราฟ เช่น query ที่คืนค่าเดียว
 
 ## Status Values
 

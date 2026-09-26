@@ -1,13 +1,67 @@
-__pycache__/
-*.py[cod]
+# ==========================================
+# Environment Variables & Secrets
+# ==========================================
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+
+# ==========================================
+# Python Virtual Environments & Builds
+# ==========================================
 .venv/
 venv/
+env/
+ENV/
+build/
+dist/
+*.egg-info/
+*.egg
+
+# ==========================================
+# Python Bytecode & Caches
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# ==========================================
+# Testing & Code Quality Caches
+# ==========================================
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-dist/
-build/
-*.egg-info/
-.DS_Store
+.coverage
+htmlcov/
 
+# ==========================================
+# Node.js Dependencies & Logs
+# ==========================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ==========================================
+# OS & Editor Specific Files
+# ==========================================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+.vscode/
+.idea/
+
+# ==========================================
+# Logs & Compressed Archives
+# ==========================================
+*.log
+*.zip
+*.tar.gz
+*.rar
+*.7z
+tmp/
+temp/

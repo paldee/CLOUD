@@ -9,6 +9,8 @@ def test_accepts_allowlisted_select_and_adds_limit() -> None:
     assert result.allowed is True
     assert result.sql is not None
     assert "LIMIT 100" in result.sql
+    assert "\n" in result.sql
+    assert "\nFROM data_warehouse.fact_sales" in result.sql
 
 
 def test_rejects_write_statement() -> None:
@@ -70,3 +72,21 @@ def test_rejects_multiple_statements() -> None:
 
     assert result.allowed is False
     assert "Exactly one SQL statement is allowed" in result.violations
+
+
+def test_accepts_documented_scd3_warehouse_columns() -> None:
+    result = validate_and_bound_sql(
+        "SELECT current_warehouse_name, previous_warehouse_name "
+        "FROM data_warehouse.dim_warehouse"
+    )
+
+    assert result.allowed is True
+
+
+def test_rejects_legacy_warehouse_name() -> None:
+    result = validate_and_bound_sql(
+        "SELECT warehouse_name FROM data_warehouse.dim_warehouse"
+    )
+
+    assert result.allowed is False
+    assert "Column is not allowlisted: warehouse_name" in result.violations

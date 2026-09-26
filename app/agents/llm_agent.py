@@ -1,7 +1,8 @@
 from pathlib import Path
 
 from app.agents.state import QueryPlan
-from app.db.schema_catalog import render_schema_context
+from app.db.schema_catalog import DATA_WAREHOUSE_SCHEMA, render_schema_context
+from app.providers.base import LLMProvider, SummarizationRequest, TextToSQLRequest
 from app.tools.rag_tool import retrieve_context
 
 
@@ -12,14 +13,29 @@ def load_prompt(name: str) -> str:
     return (PROMPT_DIR / name).read_text(encoding="utf-8")
 
 
-def create_query_plan(question: str, user_role: str | None = None) -> QueryPlan:
+def create_query_plan(
+    question: str,
+    user_role: str | None = None,
+    provider: LLMProvider | None = None,
+) -> QueryPlan:
     """
     Framework-neutral LLM boundary.
 
     Replace the heuristic with a provider call that returns a typed QueryPlan.
     The workflow must still validate every generated SQL statement afterward.
     """
-    _ = user_role, render_schema_context(), retrieve_context(question)
+    schema_context = render_schema_context()
+    if provider is not None:
+        request = TextToSQLRequest(
+            question=question,
+            schema_context=schema_context,
+            system_prompt=load_prompt("system_prompt.md"),
+            text_to_sql_prompt=load_prompt("text_to_sql.md"),
+            user_role=user_role,
+        )
+        return provider.generate_query_plan(request)
+
+    _ = user_role, schema_context, retrieve_context(question)
 
     if _looks_like_analytics_question(question):
         return QueryPlan(intent="analytics", sql=_build_placeholder_sql(question))
@@ -33,7 +49,7 @@ def answer_from_context(question: str, user_role: str | None = None) -> str:
     return (
         "ยังไม่ได้ต่อ LLM provider จริงใน skeleton นี้ "
         "แต่ agent ได้เตรียม context สำหรับตอบคำถามแล้ว: "
-        f"role={user_role or 'ไม่ระบุ'}, schema_tables={schema_context.count('- ')}, "
+        f"role={user_role or 'ไม่ระบุ'}, schema_tables={len(DATA_WAREHOUSE_SCHEMA)}, "
         f"rag_context_items={len(rag_context)}"
     )
 
@@ -71,9 +87,23 @@ def _build_placeholder_sql(question: str) -> str:
     """.strip()
 
 
-def summarize_rows(question: str, rows: list[dict]) -> str:
+def summarize_rows(
+    question: str,
+    rows: list[dict],
+    user_role: str | None = None,
+    provider: LLMProvider | None = None,
+) -> str:
     if not rows:
-        return "ยังไม่พบข้อมูลจากฐานข้อมูล หรือยังไม่ได้ตั้งค่า DATABASE_URL สำหรับ query จริง"
+        return "ไม่พบข้อมูลที่ตรงกับเงื่อนไขในฐานข้อมูล (ผลการค้นหาเป็น 0 แถว)"
+
+    if provider is not None:
+        return provider.summarize_query_result(
+            SummarizationRequest(
+                question=question,
+                rows=rows,
+                user_role=user_role,
+            )
+        )
 
     return (
         f"คำถาม: {question}\n"

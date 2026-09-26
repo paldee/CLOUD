@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="agentTitle">AgriChain - ผู้ช่วย AI</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            background: #EDE8DC;
+            color: #1D1C14;
+            overflow-x: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            width: 100vw;
+            min-height: 100vh;
+        }
+
+        /* Sidebar โครงสร้างเดียวกับ dashboard.html */
+        .sidebar {
+            width: 250px;
+            min-width: 250px;
+            background: #F4F0E6;
+            border-right: 1px solid rgba(128, 85, 50, .10);
+            padding: 24px 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: all 0.3s ease;
+            z-index: 5;
+        }
+
+        .brand-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+            padding-left: 6px;
+        }
+
+        .brand-logo {
+            width: 26px;
+            height: 26px;
+            color: #546341;
+            flex-shrink: 0;
+        }
+
+        .brand-title {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: #805532;
+            line-height: 1.1;
+        }
+
+        .brand-title span {
+            display: block;
+            font-size: .75rem;
+            font-weight: 400;
+            color: #57633D;
+        }
+
+        .btn-new-order {
+            width: 100%;
+            padding: 10px 14px;
+            background: #D7E5B6;
+            color: #546341;
+            border: 0;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: .88rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            transition: background 0.2s;
+        }
+
+        .btn-new-order:hover {
+            background: #cae0a1;
+        }
+
+        .nav-menu, .sidebar-bottom {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            list-style: none;
+        }
+
+        .nav-item a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            color: #546341;
+            text-decoration: none;
+            font-size: .9rem;
+            font-weight: 500;
+            border-radius: 8px;
+            white-space: nowrap;
+            transition: background 0.2s;
+        }
+
+        /* ไฮไลต์แถบสีเขียวจะอยู่ที่ปุ่ม ผู้ช่วย AI ในหน้านี้ */
+        .nav-item.active a {
+            background: #D7E5B6;
+            color: #546341;
+            font-weight: 600;
+        }
+
+        .nav-item a:hover {
+            background: rgba(215, 229, 182, .55);
+        }
+
+        .nav-icon {
+            width: 20px;
+            height: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .nav-icon svg {
+            width: 18px;
+            height: 18px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .sidebar-bottom {
+            border-top: 1px solid rgba(128, 85, 50, .10);
+            padding-top: 16px;
+        }
+
+        /* Main Content ส่วน AI Chat */
+        .main-content {
+            flex: 1;
+            min-width: 0;
+            padding: 36px 5%;
+            background: #F8F3E7;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            height: 100vh;
+        }
+
+        .page-header h1 {
+            font-size: 1.8rem;
+            line-height: 1.2;
+            color: #805532;
+            margin-bottom: 6px;
+        }
+
+        .page-header p {
+            font-size: .95rem;
+            color: #5E674C;
+        }
+
+        /* Chat Container Box */
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #FFFFFF;
+            border: 1px solid rgba(128, 85, 50, .15);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+            margin-bottom: 20px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .chat-bubble {
+            max-width: 80%;
+            padding: 12px 18px;
+            border-radius: 14px;
+            font-size: .95rem;
+            line-height: 1.5;
+        }
+
+        .chat-bubble.ai {
+            align-self: flex-start;
+            background: #F4F0E6;
+            color: #1D1C14;
+            border-bottom-left-radius: 4px;
+        }
+
+        .chat-bubble.user {
+            align-self: flex-end;
+            background: #805532;
+            color: #FFFFFF;
+            border-bottom-right-radius: 4px;
+        }
+
+        /* Chat Input Box */
+        .chat-input-area {
+            padding: 16px 20px;
+            background: #F8F3E7;
+            border-top: 1px solid rgba(128, 85, 50, .12);
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .chat-input-area input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid rgba(128, 85, 50, .2);
+            border-radius: 24px;
+            font-size: .95rem;
+            outline: none;
+            background: #FFFFFF;
+        }
+
+        .chat-input-area input:focus {
+            border-color: #805532;
+        }
+
+        .btn-send {
+            padding: 12px 24px;
+            background: #805532;
+            color: #FFFFFF;
+            border: none;
+            border-radius: 24px;
+            font-weight: 600;
+            font-size: .9rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-send:hover {
+            background: #674326;
+        }
+
+        /* Language Switch */
+        .language-switch {
+            position: fixed;
+            right: 24px;
+            top: 20px;
+            display: flex;
+            background: #F8F3E7;
+            border: 1px solid rgba(128, 85, 50, .2);
+            border-radius: 20px;
+            padding: 3px;
+            z-index: 10;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .language-switch button {
+            border: 0;
+            background: transparent;
+            padding: 4px 12px;
+            border-radius: 16px;
+            cursor: pointer;
+            color: #546341;
+            font-weight: 500;
+        }
+
+        .language-switch .active {
+            background: #D7E5B6;
+            color: #805532;
+            font-weight: 700;
+        }
+
+        @media(max-width: 900px) {
+            .sidebar {
+                width: 72px;
+                min-width: 72px;
+                padding: 18px 8px;
+                align-items: center;
+            }
+
+            .brand-title, .btn-new-order .label, .nav-item .label {
+                display: none;
+            }
+
+            .main-content {
+                padding: 24px 16px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="language-switch">
+        <button id="thBtn" class="active">ไทย</button>
+        <button id="enBtn">EN</button>
+    </div>
+
+    <div class="app-container">
+        <!-- Sidebar เดียวกับ dashboard.html -->
+        <aside class="sidebar">
+            <div>
+                <div class="brand-header">
+                    <svg class="brand-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 4C12 4 5 8 3 20c8-1 15-6 18-16Z" />
+                        <path d="M4 19c4-5 8-8 14-11" />
+                    </svg>
+                    <div class="brand-title">AgriChain</div>
+                </div>
+                <ul class="nav-menu">
+                    <li class="nav-item"><a href="#">
+                        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg></span>
+                        <span class="label" data-i18n="dashboard">แดชบอร์ด</span>
+                    </a></li>
+                    
+                    <!-- กดปุ่มนี้เพื่อกลับไปหน้า Dashboard / ศูนย์อัปโหลดข้อมูล -->
+                    <li class="nav-item"><a href="/dashboard.html">
+                        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 19V9"/><path d="M12 19V5"/><path d="M19 19v-7"/></svg></span>
+                        <span class="label" data-i18n="supply">คลังข้อมูล</span>
+                    </a></li>
+
+                    <!-- หน้านี้คือหน้า AI จึงใส่ class="nav-item active" -->
+                    <li class="nav-item active"><a href="/agent.html">
+                        <span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="13" rx="3"/><path d="M9 7V5h6v2"/><circle cx="9" cy="13" r="1"/><circle cx="15" cy="13" r="1"/><path d="M9 17h6"/></svg></span>
+                        <span class="label" data-i18n="ai">ผู้ช่วย AI</span>
+                    </a></li>
+                </ul>
+            </div>
+            <ul class="sidebar-bottom">
+                <li class="nav-item">
+                    <a href="index.html" id="accountBtn">
+                        <span class="nav-icon">👤</span>
+                        <span class="label" data-i18n="account">บัญชี / ออกจากระบบ</span>
+                    </a>
+                </li>
+            </ul>
+        </aside>
+
+        <!-- พื้นที่แสดง Chat หลัก -->
+        <main class="main-content">
+            <header class="page-header">
+                <h1 data-i18n="aiHeader">🤖 ผู้ช่วยวิเคราะห์ข้อมูล AI</h1>
+                <p data-i18n="aiDesc">สอบถามข้อมูลสินค้า ราคา และห่วงโซ่อุปทานด้วยภาษาธรรมชาติ</p>
+            </header>
+
+            <div class="chat-container">
+                <div class="chat-messages" id="chatMessages">
+                    <div class="chat-bubble ai" data-i18n="aiGreeting">
+                        สวัสดีครับ! ผมคือ AgriChain AI ผู้ช่วยวิเคราะห์ข้อมูลของคุณ มีอะไรให้ผมช่วยเหลือเกี่ยวกับสินค้าและห่วงโซ่อุปทานวันนี้ไหมครับ?
+                    </div>
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" id="userInput" placeholder="พิมพ์คำถามของคุณที่นี่..." data-i18n-placeholder="chatPlaceholder" onkeypress="handleKeyPress(event)" />
+                    <button class="btn-send" onclick="sendMessage()" data-i18n="send">ส่ง</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="i18next.min.js"></script>
+    <script src="translations.js"></script>
+    <script>
+        // ระบบรับ-ส่งข้อความ Chat
+        const chatMessages = document.getElementById("chatMessages");
+        const userInput = document.getElementById("userInput");
+
+        function handleKeyPress(e) {
+            if (e.key === 'Enter') sendMessage();
+        }
+
+        // Confirmation on Sign Out
+        const accountBtn = document.getElementById("accountBtn");
+        if (accountBtn) {
+            accountBtn.addEventListener("click", (e) => {
+                if (!confirm(window.t("logoutConfirm"))) {
+                    e.preventDefault();
+                }
+            });
+        }
+
+        function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            // พิมพ์ข้อความผู้ใช้
+            appendBubble(text, 'user');
+            userInput.value = '';
+
+            // แสดงสถานะกำลังคิด
+            const loadingBubble = appendBubble(window.t('processing'), 'ai');
+
+            // เลือกว่าจะเรียกตรงไปยัง FastAPI (8000) หรือผ่าน Express proxy (/api/chat)
+            const apiEndpoint = (window.location.port === '3000' || window.location.pathname.startsWith('/api'))
+                ? '/api/chat'
+                : 'http://localhost:8000/ask';
+
+            fetch(apiEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question: text, message: text, user_role: 'analyst' })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return res.json();
+            })
+            .then(data => {
+                loadingBubble.textContent = data.answer || data.reply || data.message || window.t('successProcess');
+            })
+            .catch(err => {
+                loadingBubble.textContent = window.t('aiError');
+            });
+        }
+
+        function appendBubble(text, type) {
+            const bubble = document.createElement('div');
+            bubble.className = `chat-bubble ${type}`;
+            bubble.textContent = text;
+            chatMessages.appendChild(bubble);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            return bubble;
+        }
+    </script>
+</body>
+
+</html>
