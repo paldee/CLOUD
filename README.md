@@ -57,7 +57,7 @@ flowchart TD
 
 ---
 
-## โครงสร้างโปรเจกต์
+## Project Structure
 
 ```text
 CLOUD/
