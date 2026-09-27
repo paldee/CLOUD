@@ -27,7 +27,7 @@ class FakeGroqCompletions:
 def text_to_sql_request() -> TextToSQLRequest:
     return TextToSQLRequest(
         question="รับซื้อทั้งหมดกี่กิโลกรัม",
-        schema_context="TABLE: data_warehouse.fact_harvest",
+        schema_context="TABLE: public.fact_harvest",
         system_prompt="system",
         text_to_sql_prompt="schema={schema_context}\nquestion={question}",
     )
@@ -36,7 +36,7 @@ def text_to_sql_request() -> TextToSQLRequest:
 def test_groq_generates_typed_query_plan_and_summary() -> None:
     completions = FakeGroqCompletions(
         [
-            '{"intent":"analytics","sql":"SELECT SUM(quantity_kg) FROM data_warehouse.fact_harvest","assumptions":[]}',
+            '{"intent":"analytics","sql":"SELECT SUM(quantity_kg) FROM public.fact_harvest","assumptions":[]}',
             "รับซื้อรวม 250 กิโลกรัม",
         ]
     )
@@ -83,7 +83,7 @@ def test_groq_retries_invalid_query_plan_once() -> None:
         [
             "not-json",
             '{"intent":"analytics","sql":"SELECT SUM(quantity_kg) '
-            'FROM data_warehouse.fact_harvest","assumptions":[]}',
+            'FROM public.fact_harvest","assumptions":[]}',
         ]
     )
     client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
