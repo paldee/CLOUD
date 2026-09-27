@@ -1027,8 +1027,51 @@
             }
         }
 
-        function loadInitialFiles() {
-            renderEmptyState();
+        function addFileRowToTable(item) {
+            const tr = document.createElement('tr');
+            tr.dataset.fileName = item.name;
+            tr.dataset.s3Key = item.key || '';
+
+            tr.innerHTML = `
+                <td class="file-cell" style="cursor: pointer;" onclick="previewFileByName('${escapeJs(item.name)}', '${escapeJs(item.key)}')">
+                    <span class="file-icon" style="cursor: pointer;" title="${window.t('preview')}">
+                        <svg viewBox="0 0 24 24"><path d="M5 3h10l4 4v14H5z"/><path d="M15 3v5h4"/></svg>
+                    </span>
+                    <span class="file-link" data-i18n-title="preview" title="${window.t('preview')} (${item.name})">${escapeHtml(item.name)}</span>
+                </td>
+                <td>${item.size || '-'}</td>
+                <td><span class="badge badge-success" data-i18n="success">${window.t('success')}</span></td>
+                <td>
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                        <span>${item.time || ''}</span>
+                        <span class="action-area" style="display: inline-flex; align-items: center; gap: 6px;">
+                            ${item.key ? `<button class="btn-action btn-delete" title="${window.t('delete')}" data-i18n-title="delete" onclick="deleteFile('${item.key}', this)">${trashIconSvg}</button>` : ''}
+                        </span>
+                    </div>
+                </td>
+            `;
+
+            const emptyRow = document.getElementById('emptyRow');
+            if (emptyRow) emptyRow.remove();
+
+            recentTableBody.appendChild(tr);
+        }
+
+        async function loadInitialFiles() {
+            try {
+                const res = await fetch('/api/uploads');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                if (data.files && data.files.length > 0) {
+                    recentTableBody.innerHTML = '';
+                    data.files.forEach(addFileRowToTable);
+                } else {
+                    renderEmptyState();
+                }
+            } catch (err) {
+                console.warn('Failed to load uploads:', err);
+                renderEmptyState();
+            }
         }
 
         loadInitialFiles();

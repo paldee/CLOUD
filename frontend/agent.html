@@ -196,11 +196,11 @@
         }
 
         .chat-bubble {
-            max-width: 80%;
-            padding: 12px 18px;
+            max-width: 85%;
+            padding: 14px 18px;
             border-radius: 14px;
             font-size: .95rem;
-            line-height: 1.5;
+            line-height: 1.6;
         }
 
         .chat-bubble.ai {
@@ -208,6 +208,75 @@
             background: #F4F0E6;
             color: #1D1C14;
             border-bottom-left-radius: 4px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+            min-width: 200px;
+        }
+
+        .ai-text-content h2, .ai-text-content h3, .ai-text-content h4 {
+            margin: 12px 0 6px 0;
+            color: #546341;
+            font-weight: 700;
+        }
+
+        .ai-text-content p {
+            margin-bottom: 8px;
+        }
+
+        .ai-text-content p:last-child {
+            margin-bottom: 0;
+        }
+
+        .ai-text-content ul, .ai-text-content ol {
+            margin: 6px 0 10px 22px;
+        }
+
+        .ai-text-content li {
+            margin-bottom: 4px;
+        }
+
+        .ai-text-content strong {
+            color: #805532;
+        }
+
+        .chat-chart-wrapper {
+            margin-top: 14px;
+            background: #FFFFFF;
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid rgba(128, 85, 50, .15);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+            height: 320px;
+            position: relative;
+            width: 100%;
+            min-width: 280px;
+        }
+
+        .sql-accordion {
+            margin-top: 10px;
+            background: rgba(255, 255, 255, 0.75);
+            border-radius: 8px;
+            padding: 8px 12px;
+            border: 1px solid rgba(128, 85, 50, .15);
+            font-size: 0.85rem;
+        }
+
+        .sql-accordion summary {
+            cursor: pointer;
+            font-weight: 600;
+            color: #546341;
+            user-select: none;
+        }
+
+        .sql-accordion pre {
+            margin-top: 8px;
+            background: #2D3748;
+            color: #F7FAFC;
+            padding: 10px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-family: monospace;
+            font-size: 0.82rem;
+            line-height: 1.4;
         }
 
         .chat-bubble.user {
@@ -375,6 +444,8 @@
 
     <script src="i18next.min.js"></script>
     <script src="translations.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
         // ระบบรับ-ส่งข้อความ Chat
         const chatMessages = document.getElementById("chatMessages");
@@ -393,6 +464,146 @@
                 }
             });
         }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function formatMarkdown(text) {
+            if (!text) return '';
+            if (window.marked && typeof window.marked.parse === 'function') {
+                try {
+                    return window.marked.parse(text);
+                } catch (e) {
+                    console.warn('marked parse error:', e);
+                }
+            }
+            // Fallback parser
+            let html = escapeHtml(text);
+            html = html.replace(/^### (.*$)/gim, '<h4>$1</h4>');
+            html = html.replace(/^## (.*$)/gim, '<h3>$1</h3>');
+            html = html.replace(/^# (.*$)/gim, '<h2>$1</h2>');
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/^\s*-\s+(.*$)/gim, '<li>$1</li>');
+            html = html.replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br>');
+            return '<p>' + html + '</p>';
+        }
+
+        function renderAIResponse(bubbleElement, data) {
+            const rawText = data.answer || data.reply || data.message || window.t('successProcess');
+            bubbleElement.innerHTML = `<div class="ai-text-content">${formatMarkdown(rawText)}</div>`;
+
+            // แสดงกราฟ Visualization เมื่อมีข้อมูล
+            if (data.visualization && data.visualization.labels && data.visualization.labels.length > 0) {
+                const chartWrapper = document.createElement('div');
+                chartWrapper.className = 'chat-chart-wrapper';
+                const canvas = document.createElement('canvas');
+                chartWrapper.appendChild(canvas);
+                bubbleElement.appendChild(chartWrapper);
+
+                setTimeout(() => {
+                    if (window.Chart) {
+                        const vis = data.visualization;
+                        const colors = [
+                            '#2E7D32', '#F57C00', '#1976D2', '#7B1FA2', '#D32F2F',
+                            '#0097A7', '#5D4037', '#C2185B', '#303F9F', '#00796B'
+                        ];
+                        const datasets = (vis.datasets || []).map((ds, idx) => ({
+                            label: ds.label || 'ยอดขาย',
+                            data: ds.data,
+                            backgroundColor: vis.type === 'line' ? 'transparent' : colors[idx % colors.length] + '99',
+                            borderColor: colors[idx % colors.length],
+                            borderWidth: 2,
+                            borderRadius: vis.type === 'bar' ? 4 : 0,
+                            pointRadius: vis.type === 'line' ? 3 : 0,
+                            tension: vis.type === 'line' ? 0.3 : 0
+                        }));
+
+                        new window.Chart(canvas, {
+                            type: vis.type || 'bar',
+                            data: {
+                                labels: vis.labels,
+                                datasets: datasets
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    title: {
+                                        display: !!vis.title,
+                                        text: vis.title,
+                                        font: { size: 14, weight: 'bold' },
+                                        color: '#2D3748',
+                                        padding: { bottom: 12 }
+                                    },
+                                    legend: {
+                                        display: datasets.length > 1,
+                                        position: 'bottom'
+                                    },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: (ctx) => `${ctx.dataset.label}: ${Number(ctx.raw).toLocaleString('th-TH', { maximumFractionDigits: 2 })}`
+                                        }
+                                    }
+                                },
+                                scales: {
+                                    x: {
+                                        grid: { display: false },
+                                        ticks: { maxRotation: 45, minRotation: 0, font: { size: 11 } }
+                                    },
+                                    y: {
+                                        beginAtZero: true,
+                                        grid: { color: 'rgba(0,0,0,0.06)' },
+                                        ticks: {
+                                            callback: (val) => Number(val).toLocaleString('th-TH', { notation: 'compact' })
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }, 50);
+            }
+
+            // แสดงคำสั่ง SQL แบบ Collapsible
+            if (data.sql) {
+                const sqlDetails = document.createElement('details');
+                sqlDetails.className = 'sql-accordion';
+                sqlDetails.innerHTML = `
+                    <summary>🔍 ดูคำสั่ง SQL ที่ใช้ดึงข้อมูล</summary>
+                    <pre><code>${escapeHtml(data.sql)}</code></pre>
+                `;
+                bubbleElement.appendChild(sqlDetails);
+            }
+
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // โหลดประวัติการแชตเดิม (In-Memory จากเซิร์ฟเวอร์) เพื่อไม่ให้หายเวลาสลับแท็บ
+        async function loadChatHistory() {
+            try {
+                const res = await fetch('/api/chat/history');
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.history && data.history.length > 0) {
+                    data.history.forEach(item => {
+                        appendBubble(item.question, 'user');
+                        const aiBubble = appendBubble('', 'ai');
+                        renderAIResponse(aiBubble, item);
+                    });
+                }
+            } catch (err) {
+                console.warn('Cannot load chat history:', err);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', loadChatHistory);
 
         function sendMessage() {
             const text = userInput.value.trim();
@@ -420,17 +631,17 @@
                 return res.json();
             })
             .then(data => {
-                loadingBubble.textContent = data.answer || data.reply || data.message || window.t('successProcess');
+                renderAIResponse(loadingBubble, data);
             })
             .catch(err => {
-                loadingBubble.textContent = window.t('aiError');
+                loadingBubble.innerHTML = `<span style="color:#C62828;">${escapeHtml(window.t('aiError'))}</span>`;
             });
         }
 
         function appendBubble(text, type) {
             const bubble = document.createElement('div');
             bubble.className = `chat-bubble ${type}`;
-            bubble.textContent = text;
+            if (text) bubble.textContent = text;
             chatMessages.appendChild(bubble);
             chatMessages.scrollTop = chatMessages.scrollHeight;
             return bubble;

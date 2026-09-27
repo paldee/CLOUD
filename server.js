@@ -43,6 +43,12 @@ const docClient = DynamoDBDocumentClient.from(dbClient);
 
 const upload = multer({ storage: multer.memoryStorage() });
 
+// ==========================================
+// In-Memory Storage (อยู่ตลอดจนกว่าจะรีสตาร์ท Server ตามโจทย์ผู้ใช้)
+// ==========================================
+let chatHistory = [];
+let uploadedFiles = [];
+
 // Helper function เปลี่ยน S3 Body Stream เป็น Text
 const streamToString = (stream) =>
     new Promise((resolve, reject) => {
@@ -151,11 +157,33 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 
     try {
         await s3Client.send(new PutObjectCommand(params));
-        res.json({ success: true, filename: req.file.originalname, key: params.Key });
+        
+        const sizeFormatted = (req.file.size / (1024 * 1024) >= 1)
+            ? (req.file.size / (1024 * 1024)).toFixed(1) + ' MB'
+            : (req.file.size / 1024).toFixed(1) + ' KB';
+        const now = new Date();
+        const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+        
+        const fileItem = {
+            name: req.file.originalname,
+            key: params.Key,
+            size: sizeFormatted,
+            time: timeStr,
+            status: 'success'
+        };
+        uploadedFiles.unshift(fileItem);
+        if (uploadedFiles.length > 100) uploadedFiles.pop();
+
+        res.json({ success: true, filename: req.file.originalname, key: params.Key, file: fileItem });
     } catch (err) {
         console.error('S3 Upload Error:', err);
         res.status(500).json({ success: false, message: 'อัปโหลดลง S3 ล้มเหลว: ' + err.message });
     }
+});
+
+// ดึงรายการไฟล์ที่อัปโหลดไว้ (In-Memory)
+app.get('/api/uploads', (req, res) => {
+    res.json({ success: true, files: uploadedFiles });
 });
 
 // ==========================================
@@ -202,6 +230,7 @@ app.delete('/api/delete', async (req, res) => {
 
     try {
         await s3Client.send(new DeleteObjectCommand(params));
+        uploadedFiles = uploadedFiles.filter(f => f.key !== key);
         res.json({ success: true, message: 'ลบไฟล์ออกจาก S3 เรียบร้อยแล้ว' });
     } catch (err) {
         console.error('S3 Delete Error:', err);
@@ -239,6 +268,19 @@ const handleAIChat = async (req, res) => {
 
         const data = await cloudResponse.json();
 
+        const chatRecord = {
+            id: Date.now(),
+            question: question,
+            answer: data.answer || data.reply,
+            sql: data.sql,
+            sources: data.sources,
+            visualization: data.visualization,
+            status: data.status,
+            timestamp: new Date().toISOString()
+        };
+        chatHistory.push(chatRecord);
+        if (chatHistory.length > 100) chatHistory.shift();
+
         res.json({
             success: true,
             reply: data.answer,
@@ -261,6 +303,17 @@ const handleAIChat = async (req, res) => {
 
 app.post('/api/ai/ask', handleAIChat);
 app.post('/api/chat', handleAIChat);
+
+// ดึงประวัติการแชตกับ AI (In-Memory)
+app.get('/api/chat/history', (req, res) => {
+    res.json({ success: true, history: chatHistory });
+});
+
+// ล้างประวัติการแชต
+app.delete('/api/chat/history', (req, res) => {
+    chatHistory = [];
+    res.json({ success: true, message: 'ล้างประวัติการคุยเรียบร้อยแล้ว' });
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
