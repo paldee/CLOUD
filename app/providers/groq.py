@@ -54,6 +54,7 @@ class GroqProvider:
                     temperature=0,
                     reasoning_effort="none",
                     response_format={"type": "json_object"},
+                    max_tokens=600,
                 )
                 try:
                     content = self._require_content(completion)
@@ -95,6 +96,7 @@ class GroqProvider:
                 ],
                 temperature=0.1,
                 reasoning_effort="none",
+                max_tokens=700,
             )
             return self._require_content(completion)
         except ProviderError:

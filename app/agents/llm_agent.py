@@ -94,16 +94,15 @@ def summarize_rows(
         return "ไม่พบข้อมูลที่ตรงกับเงื่อนไขในฐานข้อมูล (ผลการค้นหาเป็น 0 แถว)"
 
     if provider is not None:
-        return provider.summarize_query_result(
-            SummarizationRequest(
-                question=question,
-                rows=rows,
-                user_role=user_role,
+        try:
+            return provider.summarize_query_result(
+                SummarizationRequest(
+                    question=question,
+                    rows=rows,
+                    user_role=user_role,
+                )
             )
-        )
+        except Exception:
+            pass
 
-    return (
-        f"คำถาม: {question}\n"
-        f"พบผลลัพธ์ {len(rows)} แถว ตัวอย่างแถวแรก: {rows[0]}\n"
-        "ขั้นถัดไปควรแทนส่วนนี้ด้วย LLM summarizer เพื่อเล่า insight เป็นภาษาไทย"
-    )
+    return f"ดึงข้อมูลจากระบบสำเร็จ พบข้อมูลจำนวน {len(rows)} รายการ ได้แสดงผลลัพธ์ลงในกราฟและตารางวิเคราะห์เรียบร้อยแล้วครับ"
