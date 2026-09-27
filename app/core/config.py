@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
 
     database_url: str = Field(default="")
-    database_schema: str = "data_warehouse"
+    database_schema: str = "public"
 
     @field_validator("database_url", mode="before")
     @classmethod

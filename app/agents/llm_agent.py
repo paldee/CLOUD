@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from app.agents.state import QueryPlan
-from app.db.schema_catalog import DATA_WAREHOUSE_SCHEMA, render_schema_context
+from app.db.schema_catalog import DATA_WAREHOUSE_SCHEMA, DATABASE_SCHEMA, render_schema_context
 from app.providers.base import LLMProvider, SummarizationRequest, TextToSQLRequest
 from app.tools.rag_tool import retrieve_context
 
@@ -44,13 +44,10 @@ def create_query_plan(
 
 
 def answer_from_context(question: str, user_role: str | None = None) -> str:
-    schema_context = render_schema_context()
-    rag_context = retrieve_context(question)
     return (
-        "ยังไม่ได้ต่อ LLM provider จริงใน skeleton นี้ "
-        "แต่ agent ได้เตรียม context สำหรับตอบคำถามแล้ว: "
-        f"role={user_role or 'ไม่ระบุ'}, schema_tables={len(DATA_WAREHOUSE_SCHEMA)}, "
-        f"rag_context_items={len(rag_context)}"
+        "สวัสดีครับ! ผมคือผู้ช่วย AI วิเคราะห์ข้อมูลคลังสินค้าเกษตร (AgriChain) "
+        "คุณสามารถสอบถามข้อมูลเชิงวิเคราะห์ เช่น ยอดขายสุทธิรายเดือน, ปริมาณการรับซื้อผลผลิต, "
+        "สต็อกคงคลังในแต่ละคลัง หรือแนวโน้มการเติบโตของสินค้าเกษตรได้เลยครับ"
     )
 
 
@@ -61,28 +58,28 @@ def _looks_like_analytics_question(question: str) -> bool:
 
 def _build_placeholder_sql(question: str) -> str:
     if "ยอดขาย" in question or "sales" in question.lower():
-        return """
+        return f"""
         SELECT d.year, d.month, SUM(s.total_amount_thb * (1 - COALESCE(s.discount_pct, 0) / 100.0)) AS net_sales_thb
-        FROM data_warehouse.fact_sales s
-        JOIN data_warehouse.dim_date d ON d.date_key = s.sale_date_key
+        FROM {DATABASE_SCHEMA}.fact_sales s
+        JOIN {DATABASE_SCHEMA}.dim_date d ON d.date_key = s.sale_date_key
         GROUP BY d.year, d.month
         ORDER BY d.year, d.month
         LIMIT 100
         """.strip()
 
     if "รับซื้อ" in question or "harvest" in question.lower():
-        return """
+        return f"""
         SELECT d.year, d.month, SUM(h.total_amount_thb) AS total_harvest_amount_thb
-        FROM data_warehouse.fact_harvest h
-        JOIN data_warehouse.dim_date d ON d.date_key = h.harvest_date_key
+        FROM {DATABASE_SCHEMA}.fact_harvest h
+        JOIN {DATABASE_SCHEMA}.dim_date d ON d.date_key = h.harvest_date_key
         GROUP BY d.year, d.month
         ORDER BY d.year, d.month
         LIMIT 100
         """.strip()
 
-    return """
+    return f"""
     SELECT COUNT(*) AS row_count
-    FROM data_warehouse.fact_inventory
+    FROM {DATABASE_SCHEMA}.fact_inventory
     LIMIT 100
     """.strip()
 

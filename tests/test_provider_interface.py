@@ -1,5 +1,6 @@
 from app.agents.llm_agent import create_query_plan, summarize_rows
 from app.agents.state import QueryPlan
+from app.db.schema_catalog import DATABASE_SCHEMA
 from app.providers.base import LLMProvider, SummarizationRequest, TextToSQLRequest
 
 
@@ -14,7 +15,7 @@ class FakeProvider:
         self.query_request = request
         return QueryPlan(
             intent="analytics",
-            sql="SELECT COUNT(sales_id) AS sale_count FROM data_warehouse.fact_sales",
+            sql=f"SELECT COUNT(sales_id) AS sale_count FROM {DATABASE_SCHEMA}.fact_sales",
         )
 
     def summarize_query_result(self, request: SummarizationRequest) -> str:
@@ -35,7 +36,7 @@ def test_provider_protocol_and_text_to_sql_request() -> None:
     assert plan.intent == "analytics"
     assert provider.query_request is not None
     assert provider.query_request.user_role == "analyst"
-    assert "TABLE: data_warehouse.fact_sales" in provider.query_request.schema_context
+    assert f"TABLE: {DATABASE_SCHEMA}.fact_sales" in provider.query_request.schema_context
     assert "{schema_context}" in provider.query_request.text_to_sql_prompt
 
 

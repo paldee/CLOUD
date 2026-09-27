@@ -1,4 +1,4 @@
-from app.db.schema_catalog import DATA_WAREHOUSE_SCHEMA, render_schema_context
+from app.db.schema_catalog import DATA_WAREHOUSE_SCHEMA, DATABASE_SCHEMA, render_schema_context
 
 
 def test_catalog_has_documented_star_schema() -> None:
@@ -24,7 +24,7 @@ def test_every_column_has_type_and_description() -> None:
 def test_rendered_context_contains_grain_relationships_and_rules() -> None:
     context = render_schema_context()
 
-    assert "TABLE: data_warehouse.fact_sales" in context
+    assert f"TABLE: {DATABASE_SCHEMA}.fact_sales" in context
     assert "GRAIN: 1 แถว = 1 รายการขาย" in context
     assert "customer_sk -> dim_customer.customer_sk" in context
     assert "net_sales_thb = total_amount_thb" in context

@@ -1,17 +1,17 @@
+const path = require('path');
+const fs = require('fs');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, GetCommand, PutCommand } = require('@aws-sdk/lib-dynamodb');
-require('dotenv').config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
-
-const fs = require('fs');
-const path = require('path');
 
 // ดึงไฟล์ HTML ในโฟลเดอร์ frontend หรือ public มาแสดงผล
 const staticDir = fs.existsSync(path.join(__dirname, 'frontend')) ? 'frontend' : 'public';
@@ -21,16 +21,21 @@ if (staticDir !== 'public' && fs.existsSync(path.join(__dirname, 'public'))) {
 }
 
 // ==========================================
-// ตั้งค่า AWS Clients (ส่ง Credentials จาก .env เข้าไปตรงๆ)
+// ตั้งค่า AWS Clients (รองรับทั้ง Credentials จาก .env และ IAM Role บน EC2)
 // ==========================================
 const awsConfig = {
-    region: process.env.AWS_REGION || 'us-east-1',
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-        sessionToken: process.env.AWS_SESSION_TOKEN // บังคับอ่าน Session Token สำหรับ AWS Academy
-    }
+    region: process.env.AWS_REGION || 'us-east-1'
 };
+
+if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+    awsConfig.credentials = {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID.trim(),
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY.trim()
+    };
+    if (process.env.AWS_SESSION_TOKEN) {
+        awsConfig.credentials.sessionToken = process.env.AWS_SESSION_TOKEN.trim();
+    }
+}
 
 const s3Client = new S3Client(awsConfig);
 const dbClient = new DynamoDBClient(awsConfig);
@@ -62,7 +67,7 @@ app.post('/api/login', async (req, res) => {
 
     try {
         const command = new GetCommand({
-            TableName: process.env.DYNAMODB_TABLE,
+            TableName: process.env.DYNAMODB_TABLE || 'user_login',
             Key: { username: cleanUsername }
         });
 
@@ -102,7 +107,7 @@ app.post('/api/register', async (req, res) => {
 
     try {
         const checkCommand = new GetCommand({
-            TableName: process.env.DYNAMODB_TABLE,
+            TableName: process.env.DYNAMODB_TABLE || 'user_login',
             Key: { username: email.toLowerCase().trim() }
         });
         const existingUser = await docClient.send(checkCommand);

@@ -1,7 +1,7 @@
 from typing import Any
 
 
-DATABASE_SCHEMA = "data_warehouse"
+DATABASE_SCHEMA = "public"
 SQL_DIALECT = "PostgreSQL"
 
 
