@@ -81,7 +81,7 @@ CLOUD/
 ├── docs/                    # คู่มือสถาปัตยกรรม, Cloud Flow และ API Contract
 ├── frontend/                # Unified Web Application
 │   ├── index.html           # หน้าเข้าสู่ระบบ (DynamoDB Auth)
-│   ├── dashboard.html       # ศูนย์อัปโหลดข้อมูล (S3 Ingestion & CSV Preview)
+│   ├── inventory.html       # คลังสินค้า & ศูนย์อัปโหลดข้อมูล (S3 Ingestion & CSV Preview)
 │   ├── agent.html           # ผู้ช่วย AI วิเคราะห์ข้อมูลและวาดกราฟ
 │   ├── i18next.min.js       # Offline UMD bundle ของ i18next library
 │   ├── translations.js      # Unified i18n Translation Engine & Bilingual Dictionary (TH/EN)

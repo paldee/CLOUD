@@ -44,10 +44,36 @@ const docClient = DynamoDBDocumentClient.from(dbClient);
 const upload = multer({ storage: multer.memoryStorage() });
 
 // ==========================================
-// In-Memory Storage (อยู่ตลอดจนกว่าจะรีสตาร์ท Server ตามโจทย์ผู้ใช้)
+// In-Memory Storage & Server Session Tracking
+// (ข้อมูลคงอยู่ตลอดจนกว่าจะ Stop/Restart Server ตามโจทย์ผู้ใช้)
 // ==========================================
+const SERVER_INSTANCE_ID = 'srv_' + Date.now();
 let chatHistory = [];
 let uploadedFiles = [];
+
+// Middleware ตั้งค่า Cookie server_instance_id เพื่อให้ Browser ตรวจสอบสถานะการ Restart ได้
+app.use((req, res, next) => {
+    res.setHeader('Set-Cookie', `server_instance_id=${SERVER_INSTANCE_ID}; Path=/; SameSite=Lax`);
+    next();
+});
+
+// Endpoint สำหรับเช็คสถานะเซิร์ฟเวอร์และดึง Session ID
+app.get('/api/session-info', (req, res) => {
+    res.json({
+        success: true,
+        serverInstanceId: SERVER_INSTANCE_ID,
+        chatCount: chatHistory.length,
+        filesCount: uploadedFiles.length
+    });
+});
+
+// Redirect dashboard.html -> inventory.html
+app.get('/dashboard.html', (req, res) => {
+    res.redirect(301, '/inventory.html');
+});
+app.get('/dashboard', (req, res) => {
+    res.redirect(301, '/inventory.html');
+});
 
 // Helper function เปลี่ยน S3 Body Stream เป็น Text
 const streamToString = (stream) =>

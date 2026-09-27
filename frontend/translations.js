@@ -16,7 +16,7 @@
 
                 // Navigation / Sidebar
                 dashboard: "แดชบอร์ด",
-                supply: "คลังข้อมูล",
+                supply: "คลังสินค้า",
                 ai: "ผู้ช่วย AI",
                 warehouse: "คลังสินค้า",
                 account: "บัญชี / ออกจากระบบ",
@@ -43,9 +43,9 @@
                 loginRequired: "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน",
                 loading: "กำลังตรวจสอบ...",
 
-                // Data Warehouse / Dashboard Page
-                dashboardTitle: "AgriChain - คลังข้อมูล",
-                uploadCenter: "คลังข้อมูล",
+                // Data Warehouse / Inventory Page
+                dashboardTitle: "AgriChain - คลังสินค้า",
+                uploadCenter: "คลังสินค้า",
                 uploadDesc: "นำเข้าและประมวลผลชุดข้อมูลห่วงโซ่อุปทานอย่างปลอดภัย",
                 drag: "ลากและวางไฟล์ CSV ที่นี่เพื่ออัปโหลดทันที",
                 browse: "หรือคลิกพื้นที่นี้เพื่อเลือกไฟล์จากคอมพิวเตอร์ของคุณ",
@@ -99,9 +99,9 @@
 
                 // Navigation / Sidebar
                 dashboard: "Dashboard",
-                supply: "Data Center",
+                supply: "Inventory",
                 ai: "AI Assistant",
-                warehouse: "Warehouse",
+                warehouse: "Inventory",
                 account: "Account / Sign out",
                 logoutConfirm: "Are you sure you want to sign out?",
 
@@ -126,9 +126,9 @@
                 loginRequired: "Please enter username and password.",
                 loading: "Signing in...",
 
-                // Data Warehouse / Dashboard Page
-                dashboardTitle: "AgriChain - Data Center",
-                uploadCenter: "Data Center",
+                // Data Warehouse / Inventory Page
+                dashboardTitle: "AgriChain - Inventory",
+                uploadCenter: "Inventory",
                 uploadDesc: "Safely import and process supply chain datasets.",
                 drag: "Drag & drop CSV files here to upload instantly",
                 browse: "or click this area to browse from your computer",

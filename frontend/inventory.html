@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="dashboardTitle">AgriChain - คลังข้อมูล</title>
+    <title data-i18n="dashboardTitle">AgriChain - คลังสินค้า</title>
     <style>
         * {
             box-sizing: border-box;
@@ -552,9 +552,9 @@
                         <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg></span>
                         <span class="label" data-i18n="dashboard">Dashboard</span>
                     </a></li>
-                    <li class="nav-item active"><a href="/dashboard.html">
+                    <li class="nav-item active"><a href="/inventory.html">
                         <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 19V9"/><path d="M12 19V5"/><path d="M19 19v-7"/></svg></span>
-                        <span class="label" data-i18n="supply">คลังข้อมูล</span>
+                        <span class="label" data-i18n="warehouse">คลังสินค้า</span>
                     </a></li>
                     <li class="nav-item"><a href="/agent.html">
                         <span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="13" rx="3"/><path d="M9 7V5h6v2"/><circle cx="9" cy="13" r="1"/><circle cx="15" cy="13" r="1"/><path d="M9 17h6"/></svg></span>
@@ -574,7 +574,7 @@
 
         <main class="main-content">
             <header class="page-header">
-                <h1 data-i18n="uploadCenter">คลังข้อมูล</h1>
+                <h1 data-i18n="uploadCenter">คลังสินค้า</h1>
                 <p data-i18n="uploadDesc">นำเข้าและประมวลผลชุดข้อมูลห่วงโซ่อุปทานอย่างปลอดภัย</p>
             </header>
 
@@ -763,6 +763,14 @@
                         <button class="btn-action btn-delete" title="${window.t('delete')}" data-i18n-title="delete" onclick="deleteFile('${data.key}', this)">${trashIconSvg}</button>
                     `;
                 }
+
+                saveUploadedFileLocally({
+                    name: file.name,
+                    key: data.key,
+                    size: fileSize,
+                    time: timeStr,
+                    status: 'success'
+                });
             })
             .catch(err => {
                 const badge = tr.querySelector('.badge');
@@ -973,6 +981,7 @@
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
+                    removeUploadedFileLocally(s3Key);
                     const tr = btnElement.closest('tr');
                     tr.remove();
                     checkEmptyTable();
@@ -1057,20 +1066,87 @@
             recentTableBody.appendChild(tr);
         }
 
+        function getCookie(name) {
+            const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+            return m ? decodeURIComponent(m[1]) : null;
+        }
+
+        async function checkServerSession() {
+            try {
+                const res = await fetch('/api/session-info');
+                if (!res.ok) return null;
+                const info = await res.json();
+                const currentId = info.serverInstanceId;
+                const lastId = sessionStorage.getItem('agrichain_srv_id');
+
+                if (lastId && lastId !== currentId) {
+                    // เซิร์ฟเวอร์ restart แล้ว -> ล้างแคชหน้าบ้านให้เริ่มใหม่ตามโจทย์
+                    sessionStorage.clear();
+                }
+                sessionStorage.setItem('agrichain_srv_id', currentId);
+                return currentId;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function saveUploadedFileLocally(fileItem) {
+            try {
+                let files = JSON.parse(sessionStorage.getItem('agrichain_files') || '[]');
+                files = files.filter(f => f.key !== fileItem.key);
+                files.unshift(fileItem);
+                sessionStorage.setItem('agrichain_files', JSON.stringify(files));
+            } catch (e) {}
+        }
+
+        function removeUploadedFileLocally(key) {
+            try {
+                let files = JSON.parse(sessionStorage.getItem('agrichain_files') || '[]');
+                files = files.filter(f => f.key !== key);
+                sessionStorage.setItem('agrichain_files', JSON.stringify(files));
+            } catch (e) {}
+        }
+
+        function renderFileList(files) {
+            recentTableBody.innerHTML = '';
+            if (files && files.length > 0) {
+                files.forEach(addFileRowToTable);
+            } else {
+                renderEmptyState();
+            }
+        }
+
         async function loadInitialFiles() {
+            // 1. ตรวจสอบสถานะการ Restart เซิร์ฟเวอร์
+            await checkServerSession();
+
+            // 2. แสดงผลทันทีจากแคชหน้าบ้าน (สลับแท็บแล้วเห็นทันที 0ms)
+            const cached = sessionStorage.getItem('agrichain_files');
+            let hasRenderedCached = false;
+            if (cached) {
+                try {
+                    const files = JSON.parse(cached);
+                    if (Array.isArray(files) && files.length > 0) {
+                        renderFileList(files);
+                        hasRenderedCached = true;
+                    }
+                } catch (e) {}
+            }
+
+            // 3. ซิงค์กับ In-Memory บน Express เซิร์ฟเวอร์
             try {
                 const res = await fetch('/api/uploads');
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
-                if (data.files && data.files.length > 0) {
-                    recentTableBody.innerHTML = '';
-                    data.files.forEach(addFileRowToTable);
-                } else {
+                if (data.files && Array.isArray(data.files)) {
+                    sessionStorage.setItem('agrichain_files', JSON.stringify(data.files));
+                    renderFileList(data.files);
+                } else if (!hasRenderedCached) {
                     renderEmptyState();
                 }
             } catch (err) {
-                console.warn('Failed to load uploads:', err);
-                renderEmptyState();
+                console.warn('Failed to load uploads from server:', err);
+                if (!hasRenderedCached) renderEmptyState();
             }
         }
 

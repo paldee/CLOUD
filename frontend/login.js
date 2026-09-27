@@ -64,7 +64,7 @@ loginForm.addEventListener("submit", async (e) => {
             localStorage.setItem("currentUser", JSON.stringify(data.user));
             loginMessage.style.color = "#2d5028";
             loginMessage.textContent = window.t("loginSuccess");
-            setTimeout(() => { location.href = "dashboard.html"; }, 900);
+            setTimeout(() => { location.href = "inventory.html"; }, 900);
         } else {
             submitBtn.disabled = false;
             submitBtn.textContent = originalText;

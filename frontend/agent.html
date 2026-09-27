@@ -27,7 +27,7 @@
             min-height: 100vh;
         }
 
-        /* Sidebar โครงสร้างเดียวกับ dashboard.html */
+        /* Sidebar โครงสร้างเดียวกับ inventory.html */
         .sidebar {
             width: 250px;
             min-width: 250px;
@@ -382,7 +382,7 @@
     </div>
 
     <div class="app-container">
-        <!-- Sidebar เดียวกับ dashboard.html -->
+        <!-- Sidebar เดียวกับ inventory.html -->
         <aside class="sidebar">
             <div>
                 <div class="brand-header">
@@ -398,10 +398,10 @@
                         <span class="label" data-i18n="dashboard">แดชบอร์ด</span>
                     </a></li>
                     
-                    <!-- กดปุ่มนี้เพื่อกลับไปหน้า Dashboard / ศูนย์อัปโหลดข้อมูล -->
-                    <li class="nav-item"><a href="/dashboard.html">
+                    <!-- กดปุ่มนี้เพื่อไปหน้า คลังสินค้า -->
+                    <li class="nav-item"><a href="/inventory.html">
                         <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 19V9"/><path d="M12 19V5"/><path d="M19 19v-7"/></svg></span>
-                        <span class="label" data-i18n="supply">คลังข้อมูล</span>
+                        <span class="label" data-i18n="warehouse">คลังสินค้า</span>
                     </a></li>
 
                     <!-- หน้านี้คือหน้า AI จึงใส่ class="nav-item active" -->
@@ -585,25 +585,97 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        // โหลดประวัติการแชตเดิม (In-Memory จากเซิร์ฟเวอร์) เพื่อไม่ให้หายเวลาสลับแท็บ
-        async function loadChatHistory() {
+        // Helper อ่านค่า Cookie
+        function getCookie(name) {
+            const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+            return m ? decodeURIComponent(m[1]) : null;
+        }
+
+        // ตัวแปรเก็บ local state
+        let localChatHistory = [];
+
+        // ฟังก์ชันตรวจสอบ Server Instance
+        // ถ้าเซิร์ฟเวอร์เพิ่งหยุด/สตาร์ทใหม่ instance ID จะเปลี่ยน -> เคลียร์แคชหน้าบ้านให้เริ่มใหม่ตามโจทย์
+        async function checkServerSession() {
             try {
-                const res = await fetch('/api/chat/history');
-                if (!res.ok) return;
-                const data = await res.json();
-                if (data.history && data.history.length > 0) {
-                    data.history.forEach(item => {
-                        appendBubble(item.question, 'user');
-                        const aiBubble = appendBubble('', 'ai');
-                        renderAIResponse(aiBubble, item);
-                    });
+                const res = await fetch('/api/session-info');
+                if (!res.ok) return null;
+                const info = await res.json();
+                const currentId = info.serverInstanceId;
+                const lastId = sessionStorage.getItem('agrichain_srv_id');
+
+                if (lastId && lastId !== currentId) {
+                    // เซิร์ฟเวอร์ restart แล้ว -> เคลียร์ประวัติทั้งหมด
+                    sessionStorage.clear();
+                    localChatHistory = [];
                 }
-            } catch (err) {
-                console.warn('Cannot load chat history:', err);
+                sessionStorage.setItem('agrichain_srv_id', currentId);
+                return currentId;
+            } catch (e) {
+                return null;
             }
         }
 
-        window.addEventListener('DOMContentLoaded', loadChatHistory);
+        function restoreChatFromList(list) {
+            // ลบข้อความที่เพิ่มเข้ามาเดิม ยกเว้น Greeting Bubble แรก
+            const bubbles = chatMessages.querySelectorAll('.chat-bubble');
+            for (let i = 1; i < bubbles.length; i++) {
+                bubbles[i].remove();
+            }
+
+            list.forEach(item => {
+                appendBubble(item.question, 'user');
+                const aiBubble = appendBubble('', 'ai');
+                renderAIResponse(aiBubble, item);
+            });
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        async function initChatState() {
+            // 1. ตรวจสอบสถานะการ Restart ของเซิร์ฟเวอร์
+            await checkServerSession();
+
+            // 2. กู้คืนข้อความแบบ Instant จาก sessionStorage (ไม่กระพริบเวลาสลับแท็บ)
+            const cached = sessionStorage.getItem('agrichain_chat_history');
+            if (cached) {
+                try {
+                    localChatHistory = JSON.parse(cached);
+                    if (Array.isArray(localChatHistory) && localChatHistory.length > 0) {
+                        restoreChatFromList(localChatHistory);
+                    }
+                } catch (e) {
+                    console.warn('Failed to parse cached chat history', e);
+                }
+            }
+
+            // 3. ดึงข้อมูลล่าสุดจากเซิร์ฟเวอร์มา sync (Server-side In Memory)
+            try {
+                const res = await fetch('/api/chat/history');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.history && Array.isArray(data.history)) {
+                        localChatHistory = data.history;
+                        sessionStorage.setItem('agrichain_chat_history', JSON.stringify(localChatHistory));
+                        restoreChatFromList(localChatHistory);
+                    }
+                }
+            } catch (err) {
+                console.warn('Cannot sync chat history from server:', err);
+            }
+
+            // กู้คืนข้อความที่กำลังพิมพ์ค้างไว้ (Draft)
+            const draft = sessionStorage.getItem('agrichain_draft_chat');
+            if (draft && userInput) {
+                userInput.value = draft;
+            }
+        }
+
+        // บันทึกคำถามที่กำลังพิมพ์อยู่ไว้ใน sessionStorage ชั่วคราว
+        userInput.addEventListener('input', (e) => {
+            sessionStorage.setItem('agrichain_draft_chat', e.target.value);
+        });
+
+        window.addEventListener('DOMContentLoaded', initChatState);
 
         function sendMessage() {
             const text = userInput.value.trim();
@@ -612,16 +684,12 @@
             // พิมพ์ข้อความผู้ใช้
             appendBubble(text, 'user');
             userInput.value = '';
+            sessionStorage.removeItem('agrichain_draft_chat');
 
             // แสดงสถานะกำลังคิด
             const loadingBubble = appendBubble(window.t('processing'), 'ai');
 
-            // เลือกว่าจะเรียกตรงไปยัง FastAPI (8000) หรือผ่าน Express proxy (/api/chat)
-            const apiEndpoint = (window.location.port === '3000' || window.location.pathname.startsWith('/api'))
-                ? '/api/chat'
-                : 'http://localhost:8000/ask';
-
-            fetch(apiEndpoint, {
+            fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ question: text, message: text, user_role: 'analyst' })
@@ -632,6 +700,16 @@
             })
             .then(data => {
                 renderAIResponse(loadingBubble, data);
+
+                // บันทึกลง local history และ sessionStorage ทันที
+                const record = {
+                    question: text,
+                    answer: data.answer || data.reply,
+                    sql: data.sql,
+                    visualization: data.visualization
+                };
+                localChatHistory.push(record);
+                sessionStorage.setItem('agrichain_chat_history', JSON.stringify(localChatHistory));
             })
             .catch(err => {
                 loadingBubble.innerHTML = `<span style="color:#C62828;">${escapeHtml(window.t('aiError'))}</span>`;
