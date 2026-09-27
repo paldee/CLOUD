@@ -27,14 +27,14 @@ def answer_question(question: str, user_role: str | None = None) -> dict:
             user_role=user_role,
             provider=provider,
         )
-    except ProviderError:
+    except ProviderError as exc:
         logger.warning("LLM provider failed while answering a question", exc_info=True)
         return {
-            "answer": "LLM provider ประมวลผลไม่สำเร็จ จึงไม่ได้เรียกฐานข้อมูล",
+            "answer": f"LLM provider ประมวลผลไม่สำเร็จ: {exc}",
             "sql": None,
             "sources": [f"llm:{provider.name}"] if provider else [],
             "status": "rejected",
-            "guardrail_violations": ["LLM provider error"],
+            "guardrail_violations": [str(exc)],
         }
 
     return {
