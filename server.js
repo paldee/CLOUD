@@ -379,61 +379,101 @@ app.get('/api/dashboard-data', async (req, res) => {
 });
 
 // ==========================================
-// API 7: ดึงข้อมูลจาก RDS Data Warehouse ส่งให้ Dashboard
+// API 7: ดึงข้อมูลจาก RDS Data Warehouse พร้อมระบบตัวกรอง (Filters)
 // ==========================================
 const { Pool } = require('pg');
 
-// สร้าง Connection Pool ไปยัง RDS
+// ปิดการตรวจสอบ SSL เฉพาะ Node.js และจัดการ URL
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+const nodeDbUrl = process.env.DATABASE_URL.replace('postgresql+psycopg://', 'postgresql://');
+
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false } // จำเป็นสำหรับการต่อเข้า AWS RDS
+    connectionString: nodeDbUrl,
+    ssl: { rejectUnauthorized: false }
 });
 
 app.get('/api/dashboard', async (req, res) => {
     try {
-        // 1. ดึงข้อมูลสรุปฝั่ง Harvest (รับซื้อ)
+        // 1. รับค่าตัวกรองจากหน้าเว็บ
+        const { date, warehouse, crop } = req.query;
+
+        // 2. ฟังก์ชันสร้างเงื่อนไข WHERE แบบไดนามิก รองรับทุกตัวกรอง
+        const buildWhereClause = (dateColumn, tableAlias = '') => {
+            let conditions = [];
+            const prefix = tableAlias ? `${tableAlias}.` : ''; // ป้องกันชื่อคอลัมน์ซ้ำตอน JOIN ตาราง
+
+            // ตัวกรองที่ 1: หมวดหมู่ผลผลิต
+            if (crop && crop !== 'all') {
+                const catTh = crop === 'grain' ? 'ธัญพืช' : (crop === 'fruit' ? 'ผลไม้' : 'ผัก');
+                conditions.push(`${prefix}crop_sk IN (SELECT crop_sk FROM public.dim_crop WHERE category = '${catTh}')`);
+            }
+
+            // ตัวกรองที่ 2: คลังสินค้า (ถ้ามีตัวเลือกเพิ่มในอนาคต โค้ดนี้ก็พร้อมทำงาน)
+            if (warehouse && warehouse !== 'all') {
+                conditions.push(`${prefix}warehouse_sk IN (SELECT warehouse_sk FROM public.dim_warehouse WHERE warehouse_id = '${warehouse}')`);
+            }
+
+            // ตัวกรองที่ 3: ช่วงเวลา (อิงจากวันที่ปัจจุบัน)
+            if (date === 'month') {
+                conditions.push(`${prefix}${dateColumn} IN (SELECT date_key FROM public.dim_date WHERE month = EXTRACT(MONTH FROM CURRENT_DATE) AND year = EXTRACT(YEAR FROM CURRENT_DATE))`);
+            } else if (date === 'quarter') {
+                conditions.push(`${prefix}${dateColumn} IN (SELECT date_key FROM public.dim_date WHERE quarter = EXTRACT(QUARTER FROM CURRENT_DATE) AND year = EXTRACT(YEAR FROM CURRENT_DATE))`);
+            } else if (date === 'year') {
+                conditions.push(`${prefix}${dateColumn} IN (SELECT date_key FROM public.dim_date WHERE year = EXTRACT(YEAR FROM CURRENT_DATE))`);
+            }
+
+            return conditions.length > 0 ? "WHERE " + conditions.join(" AND ") : "";
+        };
+
+        // 3. นำเงื่อนไขไปเสียบใน Query ของแต่ละตาราง (Fact Tables)
+        const harvestWhere = buildWhereClause('harvest_date_key');
+        const harvestWhereAlias = buildWhereClause('harvest_date_key', 'h'); 
+        const salesWhere = buildWhereClause('sale_date_key');
+        const shipWhere = buildWhereClause('shipment_date_key');
+
         const harvestKpi = await pool.query(`
             SELECT 
                 COALESCE(SUM(total_amount_thb), 0) AS amount, 
                 COALESCE(SUM(quantity_kg), 0) / 1000 AS qty_ton, 
                 COALESCE(AVG(price_per_kg), 0) AS avg_price 
             FROM public.fact_harvest
+            ${harvestWhere}
         `);
 
-        // 2. ดึงข้อมูลสัดส่วนผลผลิต (Crop) ฝั่งรับซื้อ
         const cropQuery = await pool.query(`
             SELECT c.crop_name, COALESCE(SUM(h.quantity_kg), 0) / 1000 AS qty_ton
             FROM public.fact_harvest h
             JOIN public.dim_crop c ON h.crop_sk = c.crop_sk
+            ${harvestWhereAlias} 
             GROUP BY c.crop_name
         `);
         let cropData = {};
         cropQuery.rows.forEach(r => cropData[r.crop_name] = Number(r.qty_ton));
 
-        // 3. ดึงข้อมูลสรุปฝั่ง Sales (ขาย)
         const salesKpi = await pool.query(`
             SELECT 
                 COALESCE(SUM(total_amount_thb), 0) AS amount, 
                 COALESCE(SUM(quantity_kg), 0) / 1000 AS qty_ton 
             FROM public.fact_sales
+            ${salesWhere}
         `);
 
-        // 4. ดึงข้อมูลค่าขนส่งรวมฝั่ง Shipment
         const shipKpi = await pool.query(`
             SELECT COALESCE(SUM(shipping_cost_thb), 0) AS shipping 
             FROM public.fact_shipment
+            ${shipWhere}
         `);
 
-        // จัดรูป JSON ส่งกลับไปให้หน้า Frontend ตาม Format ที่ต้องการ
+        // 4. ส่งข้อมูลกลับไปให้หน้า Dashboard
         res.json({
             harvest: {
                 amount: Number(harvestKpi.rows[0].amount),
                 quantity: Number(harvestKpi.rows[0].qty_ton),
                 avgPrice: Number(harvestKpi.rows[0].avg_price),
                 months: ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย."],
-                trend: [0, 0, 0, 0, Number(harvestKpi.rows[0].qty_ton) * 0.4, Number(harvestKpi.rows[0].qty_ton) * 0.6], // จำลอง Trend
-                crops: Object.keys(cropData).length > 0 ? cropData : { "รอข้อมูล": 0 },
-                cooperatives: { "สหกรณ์ A": 310, "สหกรณ์ B": 275, "สหกรณ์ C": 220 } // Mock ข้อมูลกราฟแท่ง
+                trend: [0, 0, 0, 0, Number(harvestKpi.rows[0].qty_ton) * 0.4, Number(harvestKpi.rows[0].qty_ton) * 0.6],
+                crops: Object.keys(cropData).length > 0 ? cropData : { "ไม่มีข้อมูลในเงื่อนไขนี้": 0 },
+                cooperatives: { "สหกรณ์ A": 310, "สหกรณ์ B": 275, "สหกรณ์ C": 220 }
             },
             sales: {
                 amount: Number(salesKpi.rows[0].amount),
@@ -451,7 +491,7 @@ app.get('/api/dashboard', async (req, res) => {
         });
     } catch (err) {
         console.error('RDS Database Error:', err);
-        res.status(500).json({ success: false, message: 'ไม่สามารถดึงข้อมูลจากฐานข้อมูลได้: ' + err.message });
+        res.status(500).json({ success: false, message: 'ไม่สามารถดึงข้อมูลได้: ' + err.message });
     }
 });
 
