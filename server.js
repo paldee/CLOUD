@@ -341,6 +341,120 @@ app.delete('/api/chat/history', (req, res) => {
     res.json({ success: true, message: 'ล้างประวัติการคุยเรียบร้อยแล้ว' });
 });
 
+// ==========================================
+// API เพิ่มเติม: ดึงและประมวลผลข้อมูล CSV จาก S3 สำหรับ Dashboard
+// ==========================================
+app.get('/api/dashboard-data', async (req, res) => {
+    try {
+        // ค้นหาไฟล์ CSV ล่าสุดที่อัปโหลดใน uploadedFiles
+        if (uploadedFiles.length === 0) {
+            return res.status(404).json({ success: false, message: 'ยังไม่มีไฟล์ CSV ในระบบ' });
+        }
+
+        const latestFile = uploadedFiles[0]; // ดึงไฟล์ล่าสุด
+
+        // อ่านไฟล์จาก S3
+        const command = new GetObjectCommand({
+            Bucket: process.env.S3_BUCKET_NAME,
+            Key: latestFile.key
+        });
+        const response = await s3Client.send(command);
+        const csvContent = await streamToString(response.Body);
+
+        // แปลงข้อมูล CSV ข้อความให้เป็น JSON Structure เพื่อส่งให้ Dashboard
+        const rows = csvContent.split('\n').map(row => row.split(','));
+        const headers = rows[0];
+
+        res.json({
+            success: true,
+            fileName: latestFile.name,
+            totalRows: rows.length - 1,
+            headers: headers,
+            sampleData: rows.slice(1, 10) // ตัวอย่างข้อมูล 10 แถวแรก
+        });
+    } catch (err) {
+        console.error('Dashboard Data Error:', err);
+        res.status(500).json({ success: false, message: 'เกิดข้อผิดพลาดในการดึงข้อมูล Dashboard: ' + err.message });
+    }
+});
+
+// ==========================================
+// API 7: ดึงข้อมูลจาก RDS Data Warehouse ส่งให้ Dashboard
+// ==========================================
+const { Pool } = require('pg');
+
+// สร้าง Connection Pool ไปยัง RDS
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false } // จำเป็นสำหรับการต่อเข้า AWS RDS
+});
+
+app.get('/api/dashboard', async (req, res) => {
+    try {
+        // 1. ดึงข้อมูลสรุปฝั่ง Harvest (รับซื้อ)
+        const harvestKpi = await pool.query(`
+            SELECT 
+                COALESCE(SUM(total_amount_thb), 0) AS amount, 
+                COALESCE(SUM(quantity_kg), 0) / 1000 AS qty_ton, 
+                COALESCE(AVG(price_per_kg), 0) AS avg_price 
+            FROM public.fact_harvest
+        `);
+
+        // 2. ดึงข้อมูลสัดส่วนผลผลิต (Crop) ฝั่งรับซื้อ
+        const cropQuery = await pool.query(`
+            SELECT c.crop_name, COALESCE(SUM(h.quantity_kg), 0) / 1000 AS qty_ton
+            FROM public.fact_harvest h
+            JOIN public.dim_crop c ON h.crop_sk = c.crop_sk
+            GROUP BY c.crop_name
+        `);
+        let cropData = {};
+        cropQuery.rows.forEach(r => cropData[r.crop_name] = Number(r.qty_ton));
+
+        // 3. ดึงข้อมูลสรุปฝั่ง Sales (ขาย)
+        const salesKpi = await pool.query(`
+            SELECT 
+                COALESCE(SUM(total_amount_thb), 0) AS amount, 
+                COALESCE(SUM(quantity_kg), 0) / 1000 AS qty_ton 
+            FROM public.fact_sales
+        `);
+
+        // 4. ดึงข้อมูลค่าขนส่งรวมฝั่ง Shipment
+        const shipKpi = await pool.query(`
+            SELECT COALESCE(SUM(shipping_cost_thb), 0) AS shipping 
+            FROM public.fact_shipment
+        `);
+
+        // จัดรูป JSON ส่งกลับไปให้หน้า Frontend ตาม Format ที่ต้องการ
+        res.json({
+            harvest: {
+                amount: Number(harvestKpi.rows[0].amount),
+                quantity: Number(harvestKpi.rows[0].qty_ton),
+                avgPrice: Number(harvestKpi.rows[0].avg_price),
+                months: ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย."],
+                trend: [0, 0, 0, 0, Number(harvestKpi.rows[0].qty_ton) * 0.4, Number(harvestKpi.rows[0].qty_ton) * 0.6], // จำลอง Trend
+                crops: Object.keys(cropData).length > 0 ? cropData : { "รอข้อมูล": 0 },
+                cooperatives: { "สหกรณ์ A": 310, "สหกรณ์ B": 275, "สหกรณ์ C": 220 } // Mock ข้อมูลกราฟแท่ง
+            },
+            sales: {
+                amount: Number(salesKpi.rows[0].amount),
+                quantity: Number(salesKpi.rows[0].qty_ton),
+                shipping: Number(shipKpi.rows[0].shipping),
+                months: ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย."],
+                trend: [0, 0, 0, 0, Number(salesKpi.rows[0].qty_ton) * 0.4, Number(salesKpi.rows[0].qty_ton) * 0.6],
+                customers: { "ห้างค้าปลีก": 42, "ตลาดส่งออก": 33, "สหกรณ์เครือข่าย": 25 },
+                shipment: {
+                    modes: ["รถยนต์", "เรือ"],
+                    completed: [62, 24],
+                    pending: [15, 8]
+                }
+            }
+        });
+    } catch (err) {
+        console.error('RDS Database Error:', err);
+        res.status(500).json({ success: false, message: 'ไม่สามารถดึงข้อมูลจากฐานข้อมูลได้: ' + err.message });
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`✅ Server รันเรียบร้อยแล้วที่ http://localhost:${PORT}`);
