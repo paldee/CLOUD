@@ -385,7 +385,9 @@ const { Pool } = require('pg');
 
 // ปิดการตรวจสอบ SSL เฉพาะ Node.js และจัดการ URL
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-const nodeDbUrl = process.env.DATABASE_URL.replace('postgresql+psycopg://', 'postgresql://');
+const nodeDbUrl = process.env.DATABASE_URL
+    .replace('postgresql+psycopg://', 'postgresql://')
+    .replace('?sslmode=require', '');
 
 const pool = new Pool({
     connectionString: nodeDbUrl,
