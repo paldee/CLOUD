@@ -415,13 +415,16 @@ app.get('/api/dashboard', async (req, res) => {
                 conditions.push(`${prefix}warehouse_sk IN (SELECT warehouse_sk FROM public.dim_warehouse WHERE warehouse_id = '${warehouse}')`);
             }
 
-            // ตัวกรองที่ 3: ช่วงเวลา (อิงจากวันที่ปัจจุบัน)
+            // ตัวกรองที่ 3: ช่วงเวลา 
+            // :bulb: แก้ไข: จำลองวันที่ปัจจุบันเป็น 2025-12-31 เพื่อให้ตรงกับข้อมูลชุดสุดท้ายที่มีในฐานข้อมูล
+            const mockToday = "'2025-12-31'::date";
+
             if (date === 'month') {
-                conditions.push(`${prefix}${dateColumn} IN (SELECT date_key FROM public.dim_date WHERE month = EXTRACT(MONTH FROM CURRENT_DATE) AND year = EXTRACT(YEAR FROM CURRENT_DATE))`);
+                conditions.push(`${prefix}${dateColumn} IN (SELECT date_key FROM public.dim_date WHERE month = EXTRACT(MONTH FROM ${mockToday}) AND year = EXTRACT(YEAR FROM ${mockToday}))`);
             } else if (date === 'quarter') {
-                conditions.push(`${prefix}${dateColumn} IN (SELECT date_key FROM public.dim_date WHERE quarter = EXTRACT(QUARTER FROM CURRENT_DATE) AND year = EXTRACT(YEAR FROM CURRENT_DATE))`);
+                conditions.push(`${prefix}${dateColumn} IN (SELECT date_key FROM public.dim_date WHERE quarter = EXTRACT(QUARTER FROM ${mockToday}) AND year = EXTRACT(YEAR FROM ${mockToday}))`);
             } else if (date === 'year') {
-                conditions.push(`${prefix}${dateColumn} IN (SELECT date_key FROM public.dim_date WHERE year = EXTRACT(YEAR FROM CURRENT_DATE))`);
+                conditions.push(`${prefix}${dateColumn} IN (SELECT date_key FROM public.dim_date WHERE year = EXTRACT(YEAR FROM ${mockToday}))`);
             }
 
             return conditions.length > 0 ? "WHERE " + conditions.join(" AND ") : "";
