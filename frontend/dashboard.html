@@ -1089,8 +1089,15 @@
 
     async function loadDashboard() {
         try {
-            // ดึงข้อมูลที่ผ่านกระบวนการ ETL / Star Schema มาจากระบบ Cloud
-            const response = await fetch('/api/dashboard', {
+            // 1. ดึงค่าจากตัวกรองทั้ง 3 ตัวบนหน้าเว็บ
+            const filterDate = document.getElementById("filterDate").value;
+            const filterWarehouse = document.getElementById("filterWarehouse").value;
+            const filterCrop = document.getElementById("filterCrop").value;
+
+            // 2. แนบค่าตัวกรองไปกับ URL API
+            const url = `/api/dashboard?date=${filterDate}&warehouse=${filterWarehouse}&crop=${filterCrop}`;
+            
+            const response = await fetch(url, {
                 headers: { "Accept": "application/json" },
                 cache: "no-store"
             });
@@ -1098,10 +1105,10 @@
             if (response.ok) {
                 const cloudData = await response.json();
                 
-                // นำข้อมูลจาก Cloud มาแสดงผล
+                // 3. นำข้อมูลที่ผ่านการกรองแล้วมาอัปเดตหน้าจอ
                 window.dashboardData = cloudData;
-                setKpis(cloudData);        // อัปเดตการ์ดสรุปยอดเงิน/ปริมาณ
-                createCharts(cloudData);   // อัปเดต กราฟวงกลม แท่ง และแนวโน้ม
+                setKpis(cloudData);        
+                createCharts(cloudData);   
             }
         } catch (error) {
             console.error("ไม่สามารถเชื่อมต่อ Cloud API ได้:", error);
