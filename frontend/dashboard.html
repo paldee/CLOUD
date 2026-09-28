@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>AgriChain - แดชบอร์ด</title>
+
+    <style>
+        * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont,
+            "Segoe UI", Roboto, "Noto Sans Thai", sans-serif;
+    }
+
+    html,
+    body {
+        width: 100%;
+        min-height: 100%;
+        background: #F8F3E7;
+        color: #1D1C14;
+    }
+
+    body {
+        overflow-x: hidden;
+    }
+
+    /* =========================
+       APP CONTAINER (รักษาสภาพ Side-by-Side ตลอดเวลา)
+    ========================= */
+
+    .app-container {
+        display: flex;
+        flex-direction: row; /* บังคับวางข้างกันแนวตั้งเสมอ */
+        width: 100%;
+        min-height: 100vh;
+        background: #F8F3E7;
+    }
+
+    /* =========================
+       SIDEBAR
+    ========================= */
+
+    .sidebar {
+        width: 240px;
+        min-width: 240px;
+        height: 100vh;
+
+        position: sticky;
+        top: 0;
+
+        background: #F4F0E6;
+        border-right: 1px solid rgba(128, 85, 50, .10);
+
+        padding: 24px 16px;
+
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+
+        z-index: 5;
+        flex-shrink: 0;
+        transition: width 0.3s ease, padding 0.3s ease;
+    }
+
+    .brand-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 28px;
+        padding: 0 8px;
+    }
+
+    .brand-logo {
+        width: 28px;
+        height: 28px;
+        color: #546341;
+        flex-shrink: 0;
+    }
+
+    .brand-title {
+        display: block; 
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #805532;
+        white-space: nowrap;
+    }
+
+    .nav-menu,
+    .sidebar-bottom {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 100%;
+        list-style: none;
+    }
+
+    .nav-item {
+        width: 100%;
+    }
+
+    .nav-item a {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 14px;
+        width: 100%;
+        height: 44px;
+
+        color: #546341;
+        text-decoration: none;
+        border-radius: 10px;
+        transition: background 0.2s ease, color 0.2s ease;
+    }
+
+    .nav-item a .label {
+        display: inline-block; 
+        font-size: 0.95rem;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+
+    .nav-item a:hover {
+        background: rgba(215, 229, 182, 0.55);
+    }
+
+    .nav-item.active a {
+        background: #D7E5B6;
+        color: #546341;
+        font-weight: 700;
+    }
+
+    .nav-icon {
+        width: 22px;
+        height: 22px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .nav-icon svg {
+        width: 20px;
+        height: 20px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .sidebar-bottom {
+        margin-top: auto;
+        padding-top: 16px;
+        border-top: 1px solid rgba(128, 85, 50, .10);
+    }
+
+    /* =========================
+       MAIN CONTENT
+    ========================= */
+
+    .main-content {
+        flex: 1;
+        min-width: 0;
+        min-height: 100vh;
+        padding: 36px 5% 42px;
+        background: #F8F3E7;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+    }
+
+    /* =========================
+       HEADER & PANELS
+    ========================= */
+
+    .dashboard-header {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 24px;
+    }
+
+    .header-title h1 {
+        color: #805532;
+        font-size: 30px;
+        line-height: 1.25;
+        font-weight: 700;
+        margin-bottom: 5px;
+    }
+
+    .header-title p {
+        color: #5E674C;
+        font-size: .95rem;
+        line-height: 1.6;
+    }
+
+    .summary-grid {
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+    }
+
+    .summary-card {
+        min-height: 148px;
+        padding: 18px 20px;
+        background: #D7E5B6;
+        border: 1px solid rgba(128, 85, 50, .06);
+        border-radius: 10px;
+        box-shadow: 0 4px 14px rgba(97, 58, 26, .06);
+        position: relative;
+    }
+
+    .summary-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 13px;
+    }
+
+    .summary-icon {
+        width: 32px;
+        height: 32px;
+        display: grid;
+        place-items: center;
+        background: #FFFFFF;
+        border-radius: 7px;
+        color: #805532;
+        font-weight: bold;
+    }
+
+    .summary-icon svg,
+    .summary-icon i {
+        width: 18px;
+        height: 18px;
+    }
+
+    .summary-label {
+        color: #68704F;
+        font-size: 15px;
+        margin-bottom: 2px;
+    }
+
+    .summary-value {
+        color: #596440;
+        font-size: 28px;
+        line-height: 1.15;
+        font-weight: 700;
+        margin-bottom: 5px;
+    }
+
+    .summary-description {
+        color: #7A8069;
+        font-size: 12px;
+    }
+
+    .panel {
+        background: #FFFFFF;
+        border: 1px solid rgba(128, 85, 50, .08);
+        border-radius: 10px;
+        box-shadow: 0 4px 16px rgba(97, 58, 26, .06);
+        overflow: hidden;
+    }
+
+    .panel-header {
+        min-height: 68px;
+        padding: 16px 20px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        border-bottom: 1px solid #EEE9DE;
+    }
+
+    .panel-title h2 {
+        color: #3F3F31;
+        font-size: 18px;
+        line-height: 1.3;
+        font-weight: 700;
+        margin-bottom: 3px;
+    }
+
+    .panel-title p {
+        color: #8A887D;
+        font-size: 12px;
+    }
+
+    .language-switch {
+        position: fixed;
+        right: 24px;
+        top: 20px;
+        display: flex;
+        background: #F8F3E7;
+        border: 1px solid rgba(128, 85, 50, .2);
+        border-radius: 20px;
+        padding: 3px;
+        z-index: 100;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    .language-switch button {
+        border: 0;
+        background: transparent;
+        padding: 4px 12px;
+        border-radius: 16px;
+        cursor: pointer;
+        color: #546341;
+        font-weight: 500;
+    }
+
+    .language-switch .active {
+        background: #D7E5B6;
+        color: #805532;
+        font-weight: 700;
+    }
+
+    .filter-panel {
+        background: #FFFFFF;
+        border: 1px solid rgba(128, 85, 50, .08);
+        border-radius: 10px;
+        padding: 18px 20px;
+        box-shadow: 0 4px 16px rgba(97, 58, 26, .06);
+    }
+
+    .filter-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 14px;
+    }
+
+    .filter-title h2 {
+        color: #3F3F31;
+        font-size: 18px;
+        font-weight: 700;
+    }
+
+    .filter-title span {
+        color: #8A887D;
+        font-size: 13px;
+    }
+
+    .filter-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .filter-group > span {
+        color: #68704F;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .filter-group select {
+        width: 100%;
+        height: 38px;
+        padding: 0 12px;
+        background: #FBF9F4;
+        border: 1px solid #DED7C7;
+        border-radius: 7px;
+        color: #55574A;
+        font-size: 13px;
+        outline: none;
+        cursor: pointer;
+    }
+
+    .dashboard-section {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .section-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 16px;
+    }
+
+    .section-heading h2 {
+        color: #805532;
+        font-size: 21px;
+        font-weight: 700;
+        margin-bottom: 3px;
+    }
+
+    .section-heading p {
+        color: #8A887D;
+        font-size: 14px;
+    }
+
+    .section-badge {
+        padding: 6px 10px;
+        background: #F2F4E9;
+        color: #596440;
+        border-radius: 15px;
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .chart-grid {
+        display: grid;
+        gap: 16px;
+    }
+
+    .chart-grid.three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .chart-card {
+        min-width: 0;
+    }
+
+    .chart-box {
+        height: 250px;
+        padding: 16px;
+        position: relative;
+    }
+
+    .donut-box {
+        padding: 16px 20px;
+    }
+
+    .chart-box canvas {
+        width: 100% !important;
+        height: 100% !important;
+    }
+
+    /* =========================
+       RESPONSIVE DESIGN
+    ========================= */
+
+    /* ย่อแถบข้าง Sidebar เมื่อหน้าจอแคบกว่า 768px */
+    @media (max-width: 768px) {
+        .sidebar {
+            width: 72px;
+            min-width: 72px;
+            padding: 24px 8px;
+            align-items: center;
+        }
+
+        .brand-header {
+            justify-content: center;
+            padding: 0;
+        }
+
+        .brand-title,
+        .nav-item a .label {
+            display: none !important; /* ซ่อนข้อความเพื่อให้เหลือแต่ไอคอน */
+        }
+
+        .nav-item a {
+            justify-content: center;
+            padding: 0;
+        }
+    }
+
+    @media (max-width: 1100px) {
+        .main-content {
+            padding-left: 24px;
+            padding-right: 24px;
+        }
+
+        .chart-grid.three {
+            grid-template-columns: 1fr 1fr;
+        }
+    }
+
+    @media (max-width: 900px) {
+        .summary-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .filter-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .chart-grid.three {
+            grid-template-columns: 1fr;
+        }
+
+        .dashboard-header {
+            padding-right: 70px;
+        }
+
+        .section-heading {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+    }
+
+    @media (max-width: 560px) {
+        .main-content {
+            padding: 20px 12px;
+        }
+
+        .language-switch {
+            right: 12px;
+            top: 12px;
+        }
+
+        .summary-value {
+            font-size: 25px;
+        }
+    }
+    </style>
+</head>
+
+<body>
+
+    <div class="app-container">
+
+        <!-- =========================
+             SIDEBAR
+        ========================= -->
+        <aside class="sidebar">
+
+            <div>
+                <div class="brand-header">
+                    <svg class="brand-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 4C12 4 5 8 3 20c8-1 15-6 18-16Z" />
+                        <path d="M4 19c4-5 8-8 14-11" />
+                    </svg>
+
+                    <div class="brand-title">
+                        AgriChain
+                    </div>
+                </div>
+
+                <ul class="nav-menu">
+                    <!-- DASHBOARD ACTIVE -->
+                    <li class="nav-item active">
+                        <a href="dashboard.html" title="แดชบอร์ด">
+                            <span class="nav-icon">
+                                <svg viewBox="0 0 24 24">
+                                    <rect x="3" y="3" width="7" height="7"></rect>
+                                    <rect x="14" y="3" width="7" height="7"></rect>
+                                    <rect x="3" y="14" width="7" height="7"></rect>
+                                    <rect x="14" y="14" width="7" height="7"></rect>
+                                </svg>
+                            </span>
+                            <span class="label" data-i18n="แดชบอร์ด">แดชบอร์ด</span>
+                        </a>
+                    </li>
+
+                    <!-- INVENTORY -->
+                    <li class="nav-item">
+                        <a href="inventory.html" title="คลังสินค้า">
+                            <span class="nav-icon">
+                                <svg viewBox="0 0 24 24">
+                                    <path d="M4 19V10"></path>
+                                    <path d="M10 19V5"></path>
+                                    <path d="M16 19v-7"></path>
+                                    <path d="M22 19V8"></path>
+                                </svg>
+                            </span>
+                            <span class="label" data-i18n="คลังสินค้า">คลังสินค้า</span>
+                        </a>
+                    </li>
+
+                    <!-- AI -->
+                    <li class="nav-item">
+                        <a href="agent.html" title="ผู้ช่วย AI">
+                            <span class="nav-icon">
+                                <svg viewBox="0 0 24 24">
+                                    <rect x="5" y="7" width="14" height="12" rx="3"></rect>
+                                    <path d="M9 7V4"></path>
+                                    <path d="M15 7V4"></path>
+                                    <circle cx="9" cy="13" r="1"></circle>
+                                    <circle cx="15" cy="13" r="1"></circle>
+                                    <path d="M9 16h6"></path>
+                                </svg>
+                            </span>
+                            <span class="label" data-i18n="ผู้ช่วย AI">ผู้ช่วย AI</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            <ul class="sidebar-bottom">
+                <li class="nav-item">
+                    <a href="index.html" title="บัญชี / ออกจากระบบ">
+                        <span class="nav-icon">
+                            <svg viewBox="0 0 24 24">
+                                <circle cx="12" cy="8" r="4"></circle>
+                                <path d="M4 21c0-4 3-7 8-7s8 3 8 7"></path>
+                            </svg>
+                        </span>
+                        <span class="label" data-i18n="บัญชี / ออกจากระบบ">บัญชี / ออกจากระบบ</span>
+                    </a>
+                </li>
+            </ul>
+
+        </aside>
+
+        <!-- =========================
+             MAIN DASHBOARD
+        ========================= -->
+        <main class="main-content">
+
+            <header class="dashboard-header">
+                <div class="header-title">
+                    <h1 data-i18n="แดชบอร์ดวิเคราะห์">แดชบอร์ดวิเคราะห์</h1>
+                    <p data-i18n="ภาพรวมการรับซื้อ การขาย และการจัดส่งของสหกรณ์">
+                        ภาพรวมการรับซื้อ การขาย และการจัดส่งของสหกรณ์
+                    </p>
+                </div>
+            </header>
+
+            <!-- GLOBAL FILTERS -->
+            <section class="filter-panel">
+                <div class="filter-title">
+                    <h2 data-i18n="ตัวกรองข้อมูล">ตัวกรองข้อมูล</h2>
+                    <span data-i18n="กำหนดขอบเขตข้อมูลสำหรับทุก Dashboard">กำหนดขอบเขตข้อมูลสำหรับทุก Dashboard</span>
+                </div>
+
+                <div class="filter-grid">
+                    <label class="filter-group">
+                        <span data-i18n="ช่วงเวลา">ช่วงเวลา</span>
+                        <select id="filterDate">
+                            <option value="month" data-i18n="รายเดือน">รายเดือน</option>
+                            <option value="quarter" data-i18n="รายไตรมาส">รายไตรมาส</option>
+                            <option value="year" data-i18n="รายปี">รายปี</option>
+                        </select>
+                    </label>
+
+                    <label class="filter-group">
+                        <span data-i18n="คลังสินค้า / ไซโล">คลังสินค้า / ไซโล</span>
+                        <select id="filterWarehouse">
+                            <option value="all" data-i18n="ทุกคลังสินค้า">ทุกคลังสินค้า</option>
+                        </select>
+                    </label>
+
+                    <label class="filter-group">
+                        <span data-i18n="หมวดหมู่ผลผลิต">หมวดหมู่ผลผลิต</span>
+                        <select id="filterCrop">
+                            <option value="all" data-i18n="ทุกหมวดหมู่">ทุกหมวดหมู่</option>
+                            <option value="grain" data-i18n="ธัญพืช">ธัญพืช</option>
+                            <option value="fruit" data-i18n="ผลไม้">ผลไม้</option>
+                            <option value="vegetable" data-i18n="ผัก">ผัก</option>
+                        </select>
+                    </label>
+                </div>
+            </section>
+
+            <!-- HARVEST DASHBOARD -->
+            <section class="dashboard-section">
+                <div class="section-heading">
+                    <div>
+                        <h2 data-i18n="Harvest Dashboard">Harvest Dashboard</h2>
+                        <p data-i18n="แดชบอร์ดวิเคราะห์การรับซื้อผลผลิต">
+                            แดชบอร์ดวิเคราะห์การรับซื้อผลผลิต
+                        </p>
+                    </div>
+                    <span class="section-badge" data-i18n="ฝ่ายจัดซื้อ / ผู้บริหาร">ฝ่ายจัดซื้อ / ผู้บริหาร</span>
+                </div>
+
+                <div class="summary-grid">
+                    <article class="summary-card">
+                        <div class="summary-top">
+                            <div class="summary-icon">฿</div>
+                        </div>
+                        <div class="summary-label" data-i18n="ยอดเงินรับซื้อรวม">ยอดเงินรับซื้อรวม</div>
+                        <div class="summary-value" id="harvestAmount">฿0</div>
+                        <div class="summary-description" data-i18n="ต้นทุนผลผลิตที่จ่ายให้เกษตรกร">ต้นทุนผลผลิตที่จ่ายให้เกษตรกร</div>
+                    </article>
+
+                    <article class="summary-card">
+                        <div class="summary-top">
+                            <div class="summary-icon">KG</div>
+                        </div>
+                        <div class="summary-label" data-i18n="ปริมาณรับซื้อรวม">ปริมาณรับซื้อรวม</div>
+                        <div class="summary-value" id="harvestQuantity">0 t</div>
+                        <div class="summary-description" data-i18n="น้ำหนักผลผลิตที่รับเข้าคลัง">น้ำหนักผลผลิตที่รับเข้าคลัง</div>
+                    </article>
+
+                    <article class="summary-card">
+                        <div class="summary-top">
+                            <div class="summary-icon">AVG</div>
+                        </div>
+                        <div class="summary-label" data-i18n="ราคารับซื้อเฉลี่ยต่อกิโลกรัม">ราคารับซื้อเฉลี่ยต่อกิโลกรัม</div>
+                        <div class="summary-value" id="avgHarvestPrice">฿0</div>
+                        <div class="summary-description" data-i18n="ราคาเฉลี่ยที่สหกรณ์รับซื้อจากเกษตรกร">ราคาเฉลี่ยที่สหกรณ์รับซื้อจากเกษตรกร</div>
+                    </article>
+                </div>
+
+                <div class="chart-grid three">
+                    <article class="panel chart-card">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <h2 data-i18n="แนวโน้มการรับซื้อรายเดือน">แนวโน้มการรับซื้อรายเดือน</h2>
+                                <p data-i18n="ปริมาณรับซื้อเทียบกับเดือน">ปริมาณรับซื้อเทียบกับเดือน</p>
+                            </div>
+                        </div>
+                        <div class="chart-box"><canvas id="harvestTrendChart"></canvas></div>
+                    </article>
+
+                    <article class="panel chart-card">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <h2 data-i18n="ปริมาณรับซื้อตามหมวดหมู่">ปริมาณรับซื้อตามหมวดหมู่</h2>
+                                <p data-i18n="สัดส่วนผลผลิตที่รับเข้าระบบ">สัดส่วนผลผลิตที่รับเข้าระบบ</p>
+                            </div>
+                        </div>
+                        <div class="chart-box donut-box"><canvas id="harvestCropChart"></canvas></div>
+                    </article>
+
+                    <article class="panel chart-card">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <h2 data-i18n="Top 5 สหกรณ์">Top 5 สหกรณ์</h2>
+                                <p data-i18n="สหกรณ์ที่ส่งมอบผลผลิตมากที่สุด">สหกรณ์ที่ส่งมอบผลผลิตมากที่สุด</p>
+                            </div>
+                        </div>
+                        <div class="chart-box"><canvas id="topCooperativesChart"></canvas></div>
+                    </article>
+                </div>
+            </section>
+
+            <!-- SALES & SHIPMENT DASHBOARD -->
+            <section class="dashboard-section">
+                <div class="section-heading">
+                    <div>
+                        <h2 data-i18n="Sales & Shipment Dashboard">Sales & Shipment Dashboard</h2>
+                        <p data-i18n="แดชบอร์ดวิเคราะห์การขายและการจัดส่ง">
+                            แดชบอร์ดวิเคราะห์การขายและการจัดส่ง
+                        </p>
+                    </div>
+                    <span class="section-badge" data-i18n="ฝ่ายขาย / โลจิสติกส์">ฝ่ายขาย / โลจิสติกส์</span>
+                </div>
+
+                <div class="summary-grid">
+                    <article class="summary-card">
+                        <div class="summary-top"><div class="summary-icon">฿</div></div>
+                        <div class="summary-label" data-i18n="ยอดขายสุทธิ">ยอดขายสุทธิ</div>
+                        <div class="summary-value" id="salesAmount">฿0</div>
+                        <div class="summary-description" data-i18n="ยอดขายหลังหักส่วนลด">ยอดขายหลังหักส่วนลด</div>
+                    </article>
+
+                    <article class="summary-card">
+                        <div class="summary-top"><div class="summary-icon">KG</div></div>
+                        <div class="summary-label" data-i18n="ปริมาณผลผลิตที่ขายได้">ปริมาณผลผลิตที่ขายได้</div>
+                        <div class="summary-value" id="salesQuantity">0 t</div>
+                        <div class="summary-description" data-i18n="น้ำหนักผลผลิตที่ระบายออกจากคลัง">น้ำหนักผลผลิตที่ระบายออกจากคลัง</div>
+                    </article>
+
+                    <article class="summary-card">
+                        <div class="summary-top">
+                            <div class="summary-icon"><i data-lucide="truck"></i></div>
+                        </div>
+                        <div class="summary-label" data-i18n="ค่าจัดส่งรวม">ค่าจัดส่งรวม</div>
+                        <div class="summary-value" id="shippingCost">฿0</div>
+                        <div class="summary-description" data-i18n="ค่าใช้จ่ายรวมด้านการขนส่ง">ค่าใช้จ่ายรวมด้านการขนส่ง</div>
+                    </article>
+                </div>
+
+                <div class="chart-grid three">
+                    <article class="panel chart-card">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <h2 data-i18n="แนวโน้มยอดขายรายเดือน">แนวโน้มยอดขายรายเดือน</h2>
+                                <p data-i18n="ยอดขายสุทธิในแต่ละเดือน">ยอดขายสุทธิในแต่ละเดือน</p>
+                            </div>
+                        </div>
+                        <div class="chart-box"><canvas id="salesTrendChart"></canvas></div>
+                    </article>
+
+                    <article class="panel chart-card">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <h2 data-i18n="ยอดขายตามประเภทลูกค้า">ยอดขายตามประเภทลูกค้า</h2>
+                                <p data-i18n="สัดส่วนรายได้แยกตามกลุ่มลูกค้า">สัดส่วนรายได้แยกตามกลุ่มลูกค้า</p>
+                            </div>
+                        </div>
+                        <div class="chart-box donut-box"><canvas id="customerTypeChart"></canvas></div>
+                    </article>
+
+                    <article class="panel chart-card">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <h2 data-i18n="สถานะการจัดส่งและรูปแบบขนส่ง">สถานะการจัดส่งและรูปแบบขนส่ง</h2>
+                                <p data-i18n="จำนวนรอบจัดส่งแยกตามรูปแบบและสถานะ">จำนวนรอบจัดส่งแยกตามรูปแบบและสถานะ</p>
+                            </div>
+                        </div>
+                        <div class="chart-box"><canvas id="shipmentStatusChart"></canvas></div>
+                    </article>
+                </div>
+            </section>
+
+        </main>
+
+    </div>
+
+    <!-- LANGUAGE SWITCH -->
+    <div class="language-switch">
+        <button class="active" data-lang="th">ไทย</button>
+        <button data-lang="en">EN</button>
+    </div>
+
+    <!-- EXTERNAL LIBRARIES -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+    const translations = {
+        "แดชบอร์ด": "Dashboard",
+        "คลังสินค้า": "Inventory",
+        "ผู้ช่วย AI": "AI Assistant",
+        "บัญชี / ออกจากระบบ": "Account / Sign Out",
+        "แดชบอร์ดวิเคราะห์": "Analytics Dashboard",
+        "ภาพรวมการรับซื้อ การขาย และการจัดส่งของสหกรณ์": "Overview of cooperative harvesting, sales and shipment",
+        "ตัวกรองข้อมูล": "Global Filters",
+        "กำหนดขอบเขตข้อมูลสำหรับทุก Dashboard": "Set the data scope for all dashboards",
+        "ช่วงเวลา": "Date Range",
+        "รายเดือน": "Monthly",
+        "รายไตรมาส": "Quarterly",
+        "รายปี": "Yearly",
+        "คลังสินค้า / ไซโล": "Warehouse / Silo",
+        "ทุกคลังสินค้า": "All Warehouses",
+        "หมวดหมู่ผลผลิต": "Crop Category",
+        "ทุกหมวดหมู่": "All Categories",
+        "ธัญพืช": "Grains",
+        "ผลไม้": "Fruits",
+        "ผัก": "Vegetables",
+        "ฝ่ายจัดซื้อ / ผู้บริหาร": "Procurement / Management",
+        "ฝ่ายขาย / โลจิสติกส์": "Sales / Logistics",
+        "Harvest Dashboard": "Harvest Dashboard",
+        "แดชบอร์ดวิเคราะห์การรับซื้อผลผลิต": "Harvest Analytics Dashboard",
+        "ยอดเงินรับซื้อรวม": "Total Harvest Amount",
+        "ต้นทุนผลผลิตที่จ่ายให้เกษตรกร": "Cost paid to farmers for harvested products",
+        "ปริมาณรับซื้อรวม": "Total Quantity Harvested",
+        "น้ำหนักผลผลิตที่รับเข้าคลัง": "Weight of products received into warehouses",
+        "ราคารับซื้อเฉลี่ยต่อกิโลกรัม": "Average Price per Kg",
+        "ราคาเฉลี่ยที่สหกรณ์รับซื้อจากเกษตรกร": "Average price paid by the cooperative to farmers",
+        "แนวโน้มการรับซื้อรายเดือน": "Harvest Trend by Month",
+        "ปริมาณรับซื้อเทียบกับเดือน": "Harvest quantity by month",
+        "ปริมาณรับซื้อตามหมวดหมู่": "Harvest Amount by Crop Category",
+        "สัดส่วนผลผลิตที่รับเข้าระบบ": "Share of harvested products",
+        "Top 5 สหกรณ์": "Top 5 Cooperatives",
+        "สหกรณ์ที่ส่งมอบผลผลิตมากที่สุด": "Cooperatives with the highest deliveries",
+        "Sales & Shipment Dashboard": "Sales & Shipment Dashboard",
+        "แดชบอร์ดวิเคราะห์การขายและการจัดส่ง": "Sales & Shipment Analytics Dashboard",
+        "ยอดขายสุทธิ": "Total Sales Amount",
+        "ยอดขายหลังหักส่วนลด": "Net sales after discounts",
+        "ปริมาณผลผลิตที่ขายได้": "Total Quantity Sold",
+        "น้ำหนักผลผลิตที่ระบายออกจากคลัง": "Weight of products sold from warehouses",
+        "ค่าจัดส่งรวม": "Total Shipping Cost",
+        "ค่าใช้จ่ายรวมด้านการขนส่ง": "Total transportation cost",
+        "แนวโน้มยอดขายรายเดือน": "Sales Trend by Month",
+        "ยอดขายสุทธิในแต่ละเดือน": "Net sales by month",
+        "ยอดขายตามประเภทลูกค้า": "Sales by Customer Type",
+        "สัดส่วนรายได้แยกตามกลุ่มลูกค้า": "Revenue share by customer group",
+        "สถานะการจัดส่งและรูปแบบขนส่ง": "Shipment Status & Transport Mode",
+        "จำนวนรอบจัดส่งแยกตามรูปแบบและสถานะ": "Shipment count by transport mode and status"
+    };
+
+    let currentLanguage = localStorage.getItem("agri_language") || "th";
+    let charts = {};
+
+    function applyLanguage(lang, persist = true) {
+        currentLanguage = lang === "en" ? "en" : "th";
+
+        document.querySelectorAll("[data-i18n]").forEach(el => {
+            const key = el.dataset.i18n;
+            el.textContent = currentLanguage === "en"
+                ? (translations[key] || key)
+                : key;
+        });
+
+        document.querySelectorAll(".language-switch button").forEach(btn => {
+            btn.classList.toggle("active", btn.dataset.lang === currentLanguage);
+        });
+
+        document.documentElement.lang = currentLanguage;
+
+        if (persist) {
+            localStorage.setItem("agri_language", currentLanguage);
+            window.dispatchEvent(new CustomEvent("appLanguageChanged", {
+                detail: { language: currentLanguage }
+            }));
+        }
+
+        updateChartsLanguage();
+    }
+
+    document.querySelectorAll(".language-switch button").forEach(btn => {
+        btn.addEventListener("click", () => {
+            applyLanguage(btn.dataset.lang, true);
+        });
+    });
+
+    window.addEventListener("storage", (event) => {
+        if (event.key === "agri_language" && event.newValue) {
+            applyLanguage(event.newValue, false);
+        }
+    });
+
+    window.addEventListener("appLanguageChanged", (event) => {
+        const lang = event.detail && event.detail.language;
+        if (lang && lang !== currentLanguage) {
+            applyLanguage(lang, false);
+        }
+    });
+
+    const demoData = {
+        harvest: {
+            amount: 4850000,
+            quantity: 1240,
+            avgPrice: 38.7,
+            months: ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย."],
+            trend: [145, 190, 220, 180, 260, 245],
+            crops: { "ธัญพืช": 52, "ผลไม้": 31, "ผัก": 17 },
+            cooperatives: {"สหกรณ์ A": 310, "สหกรณ์ B": 275, "สหกรณ์ C": 220, "สหกรณ์ D": 180, "สหกรณ์ E": 155}
+        },
+        sales: {
+            amount: 7320000,
+            quantity: 980,
+            shipping: 485000,
+            months: ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย."],
+            trend: [980, 1120, 1060, 1280, 1410, 1470],
+            customers: {"ห้างค้าปลีก": 42, "ตลาดส่งออก": 33, "สหกรณ์เครือข่าย": 25},
+            shipment: {
+                modes: ["รถยนต์","เรือ"],
+                completed: [62, 24],
+                pending: [15, 8]
+            }
+        }
+    };
+
+    function money(v) {
+        return "฿" + Number(v || 0).toLocaleString("en-US");
+    }
+
+    function setKpis(data) {
+        const h = data.harvest || demoData.harvest;
+        const s = data.sales || demoData.sales;
+        document.getElementById("harvestAmount").textContent = money(h.amount);
+        document.getElementById("harvestQuantity").textContent = Number(h.quantity || 0).toLocaleString("en-US") + " t";
+        document.getElementById("avgHarvestPrice").textContent = money(h.avgPrice);
+        document.getElementById("salesAmount").textContent = money(s.amount);
+        document.getElementById("salesQuantity").textContent = Number(s.quantity || 0).toLocaleString("en-US") + " t";
+        document.getElementById("shippingCost").textContent = money(s.shipping);
+    }
+
+    function chartOptions() {
+        return {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: "bottom",
+                    labels: { font: { size: 10 }, boxWidth: 10 }
+                }
+            },
+            scales: {
+                y: { beginAtZero: true, grid: { color: "#EEE9DE" }, ticks: { font: { size: 9 } } },
+                x: { grid: { display: false }, ticks: { font: { size: 9 } } }
+            }
+        };
+    }
+
+    function destroyCharts() {
+        Object.values(charts).forEach(c => c && c.destroy());
+        charts = {};
+    }
+
+    function updateChartsLanguage() {
+        if (!window.Chart || !Object.keys(charts).length) return;
+        const data = window.dashboardData || demoData;
+        destroyCharts();
+        createCharts(data);
+    }
+
+    function createCharts(data) {
+        if (!window.Chart) return;
+        destroyCharts();
+
+        const h = data.harvest || demoData.harvest;
+        const s = data.sales || demoData.sales;
+        const lang = currentLanguage;
+
+        const monthLabels = lang === "en"
+            ? ["Jan","Feb","Mar","Apr","May","Jun"]
+            : (h.months || demoData.harvest.months);
+
+        charts.harvestTrend = new Chart(document.getElementById("harvestTrendChart"), {
+            type: "line",
+            data: {
+                labels: monthLabels,
+                datasets: [{
+                    label: lang === "en" ? "Harvest Quantity (t)" : "ปริมาณรับซื้อ (ตัน)",
+                    data: h.trend,
+                    borderColor: "#805532",
+                    backgroundColor: "rgba(215,229,182,.35)",
+                    tension: .35,
+                    fill: true
+                }]
+            },
+            options: chartOptions()
+        });
+
+        charts.harvestCrop = new Chart(document.getElementById("harvestCropChart"), {
+            type: "doughnut",
+            data: {
+                labels: lang === "en" ? ["Grains","Fruits","Vegetables"] : ["ธัญพืช","ผลไม้","ผัก"],
+                datasets: [{ data: Object.values(h.crops), backgroundColor: ["#596440","#927457","#D7E5B6"] }]
+            },
+            options: { ...chartOptions(), scales: {} }
+        });
+
+        charts.cooperatives = new Chart(document.getElementById("topCooperativesChart"), {
+            type: "bar",
+            data: {
+                labels: lang === "en" ? ["Co-op A","Co-op B","Co-op C","Co-op D","Co-op E"] : Object.keys(h.cooperatives),
+                datasets: [{
+                    label: lang === "en" ? "Quantity (t)" : "ปริมาณ (ตัน)",
+                    data: Object.values(h.cooperatives),
+                    backgroundColor: "#927457",
+                    borderRadius: 4
+                }]
+            },
+            options: chartOptions()
+        });
+
+        charts.salesTrend = new Chart(document.getElementById("salesTrendChart"), {
+            type: "line",
+            data: {
+                labels: lang === "en" ? ["Jan","Feb","Mar","Apr","May","Jun"] : (s.months || demoData.sales.months),
+                datasets: [{
+                    label: lang === "en" ? "Net Sales (THB)" : "ยอดขายสุทธิ (บาท)",
+                    data: s.trend,
+                    borderColor: "#596440",
+                    backgroundColor: "rgba(215,229,182,.35)",
+                    tension: .35,
+                    fill: true
+                }]
+            },
+            options: chartOptions()
+        });
+
+        charts.customer = new Chart(document.getElementById("customerTypeChart"), {
+            type: "doughnut",
+            data: {
+                labels: lang === "en" ? ["Retail","Export Market","Network Cooperatives"] : ["ห้างค้าปลีก","ตลาดส่งออก","สหกรณ์เครือข่าย"],
+                datasets: [{ data: Object.values(s.customers), backgroundColor: ["#596440","#927457","#D7E5B6"] }]
+            },
+            options: { ...chartOptions(), scales: {} }
+        });
+
+        charts.shipment = new Chart(document.getElementById("shipmentStatusChart"), {
+            type: "bar",
+            data: {
+                labels: lang === "en" ? ["Truck","Ship"] : ["รถยนต์","เรือ"],
+                datasets: [
+                    {
+                        label: lang === "en" ? "Completed" : "จัดส่งแล้ว",
+                        data: s.shipment.completed,
+                        backgroundColor: "#596440"
+                    },
+                    {
+                        label: lang === "en" ? "Pending" : "รอดำเนินการ",
+                        data: s.shipment.pending,
+                        backgroundColor: "#927457"
+                    }
+                ]
+            },
+            options: {
+                ...chartOptions(),
+                scales: {
+                    x: { stacked: true, grid: { display: false } },
+                    y: { stacked: true, beginAtZero: true }
+                }
+            }
+        });
+    }
+
+    async function loadDashboard() {
+        try {
+            // ดึงข้อมูลที่ผ่านกระบวนการ ETL / Star Schema มาจากระบบ Cloud
+            const response = await fetch('/api/dashboard', {
+                headers: { "Accept": "application/json" },
+                cache: "no-store"
+            });
+
+            if (response.ok) {
+                const cloudData = await response.json();
+                
+                // นำข้อมูลจาก Cloud มาแสดงผล
+                window.dashboardData = cloudData;
+                setKpis(cloudData);        // อัปเดตการ์ดสรุปยอดเงิน/ปริมาณ
+                createCharts(cloudData);   // อัปเดต กราฟวงกลม แท่ง และแนวโน้ม
+            }
+        } catch (error) {
+            console.error("ไม่สามารถเชื่อมต่อ Cloud API ได้:", error);
+        }
+    }
+
+    function applyFilters() {
+        loadDashboard();
+    }
+
+    document.querySelectorAll("#filterDate,#filterWarehouse,#filterCrop")
+        .forEach(el => el.addEventListener("change", applyFilters));
+
+    document.addEventListener("DOMContentLoaded", () => {
+        applyLanguage(currentLanguage);
+        loadDashboard();
+        if (window.lucide) {
+            lucide.createIcons();
+        }
+    });
+    </script>
+</body>
+
+</html>
