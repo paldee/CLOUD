@@ -9,6 +9,10 @@ const togglePassword = document.getElementById("togglePassword");
 const loginMessage = document.getElementById("loginMessage");
 const submitBtn = loginForm.querySelector("button[type=submit]");
 
+// Arriving on the login page (e.g. via "Sign out") ends any DynamoDB-backed session
+fetch("/api/logout", { method: "POST" }).catch(() => {});
+localStorage.removeItem("currentUser");
+
 function updatePasswordToggleAria() {
     if (togglePassword && passwordInput) {
         const hidden = passwordInput.type === "password";

@@ -1,7 +1,9 @@
 from typing import Any
 
+from app.core.config import settings
 
-DATABASE_SCHEMA = "public"
+
+DATABASE_SCHEMA = settings.database_schema
 SQL_DIALECT = "PostgreSQL"
 
 

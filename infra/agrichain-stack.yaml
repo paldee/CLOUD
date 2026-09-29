@@ -1,0 +1,565 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  AgriChain - Agriculture Supply Chain Data Warehouse AI Assistant.
+  Implements the reference architecture (VPC, IGW, ALB, Auto Scaling group of
+  EC2 web+AI servers across 2 AZs, private RDS PostgreSQL in place of Redshift,
+  DynamoDB login/session, S3 -> EventBridge -> Step Functions -> Lambda ETL)
+  using only what AWS Academy Learner Lab allows (existing LabRole /
+  LabInstanceProfile, no NAT gateway, no IAM creation).
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: agrichain
+    AllowedPattern: "[a-z][a-z0-9-]{2,20}"
+  ArtifactsBucket:
+    Type: String
+    Description: S3 bucket holding the app zip and the Lambda zip (created by infra/deploy.*)
+  AppZipKey:
+    Type: String
+    Description: S3 key of the web/AI application zip
+  LambdaZipKey:
+    Type: String
+    Description: S3 key of the ETL Lambda zip
+  DBUsername:
+    Type: String
+    Default: admin_agri
+    AllowedPattern: "[a-z][a-z0-9_]{2,20}"
+  DBPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 12
+    AllowedPattern: "[A-Za-z0-9]+"
+    ConstraintDescription: At least 12 letters/digits (kept URL-safe on purpose)
+  DbPasswordParam:
+    Type: String
+    Default: /agrichain/db_password
+    Description: SSM SecureString the EC2 instances read the DB password from
+  GroqApiKeyParam:
+    Type: String
+    Default: /agrichain/groq_api_key
+    Description: SSM SecureString holding the Groq API key
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.micro
+  DBMultiAZ:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Learner Lab free-tier accounts usually cannot use Multi-AZ; the DB subnet group still spans both AZs
+  InstanceType:
+    Type: String
+    Default: t3.small
+  DesiredCapacity:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 4
+  KeyName:
+    Type: String
+    Default: ""
+    Description: Optional EC2 key pair for SSH (Learner Lab default is vockey)
+  SshCidr:
+    Type: String
+    Default: ""
+    Description: Optional CIDR allowed to SSH to the web servers (empty = SSH closed)
+  LabRoleName:
+    Type: String
+    Default: LabRole
+  InstanceProfileName:
+    Type: String
+    Default: LabInstanceProfile
+  AdminUsername:
+    Type: String
+    Default: admin
+    Description: Login user seeded into DynamoDB
+  AdminName:
+    Type: String
+    Default: Administrator
+  AdminPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    Description: Password of the seeded login user (stored hashed)
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+
+Conditions:
+  HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
+  HasSshCidr: !Not [!Equals [!Ref SshCidr, ""]]
+
+Resources:
+  # ---------------------------------------------------------------- Network
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-vpc" }]
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-igw" }]
+
+  IgwAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-public-1" }]
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-public-2" }]
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: 10.0.11.0/24
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-private-1" }]
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: 10.0.12.0/24
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-private-2" }]
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-public-rt" }]
+
+  PublicDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IgwAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicRtAssoc1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { SubnetId: !Ref PublicSubnet1, RouteTableId: !Ref PublicRouteTable }
+
+  PublicRtAssoc2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { SubnetId: !Ref PublicSubnet2, RouteTableId: !Ref PublicRouteTable }
+
+  # No default route: private subnets are isolated. (A NAT gateway costs money and
+  # is not needed - the ETL Lambda only talks to RDS, S3 and DynamoDB.)
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-private-rt" }]
+
+  PrivateRtAssoc1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { SubnetId: !Ref PrivateSubnet1, RouteTableId: !Ref PrivateRouteTable }
+
+  PrivateRtAssoc2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { SubnetId: !Ref PrivateSubnet2, RouteTableId: !Ref PrivateRouteTable }
+
+  S3Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      VpcEndpointType: Gateway
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+      RouteTableIds: [!Ref PrivateRouteTable, !Ref PublicRouteTable]
+
+  DynamoDbEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      VpcEndpointType: Gateway
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.dynamodb"
+      RouteTableIds: [!Ref PrivateRouteTable, !Ref PublicRouteTable]
+
+  # ------------------------------------------------------- Security groups
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Internet to ALB
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0 }
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-alb-sg" }]
+
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ALB to EC2 web server and AI agent
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 3000, ToPort: 3000, SourceSecurityGroupId: !Ref AlbSecurityGroup }
+        - !If
+          - HasSshCidr
+          - { IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: !Ref SshCidr }
+          - !Ref AWS::NoValue
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-web-sg" }]
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ETL Lambda ENIs
+      VpcId: !Ref Vpc
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-lambda-sg" }]
+
+  DbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: PostgreSQL only from web servers and the ETL Lambda
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 5432, ToPort: 5432, SourceSecurityGroupId: !Ref WebSecurityGroup }
+        - { IpProtocol: tcp, FromPort: 5432, ToPort: 5432, SourceSecurityGroupId: !Ref LambdaSecurityGroup }
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-db-sg" }]
+
+  # ---------------------------------------------- Data warehouse (Amazon RDS)
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Private subnets in both AZs (second one reserved for failover)
+      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    Properties:
+      DBInstanceIdentifier: !Sub "${ProjectName}-dwh-db"
+      Engine: postgres
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: "20"
+      StorageType: gp2
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      VPCSecurityGroups: [!Ref DbSecurityGroup]
+      PubliclyAccessible: false
+      MultiAZ: !Ref DBMultiAZ
+      BackupRetentionPeriod: 0
+      StorageEncrypted: false
+      DeletionProtection: false
+
+  # -------------------------------------------- DynamoDB: login & sessions
+  UserLoginTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ProjectName}_user_login"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions: [{ AttributeName: username, AttributeType: S }]
+      KeySchema: [{ AttributeName: username, KeyType: HASH }]
+
+  UserSessionTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ProjectName}_user_session"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions: [{ AttributeName: token, AttributeType: S }]
+      KeySchema: [{ AttributeName: token, KeyType: HASH }]
+      TimeToLiveSpecification: { AttributeName: expiresAt, Enabled: true }
+
+  ChatHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ProjectName}_chat_history"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: username, AttributeType: S }
+        - { AttributeName: ts, AttributeType: N }
+      KeySchema:
+        - { AttributeName: username, KeyType: HASH }
+        - { AttributeName: ts, KeyType: RANGE }
+
+  # ---------------------------------------- S3 -> EventBridge -> Step Functions
+  CsvBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      NotificationConfiguration:
+        EventBridgeConfiguration: { EventBridgeEnabled: true }
+
+  EtlFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-etl"
+      Runtime: python3.12
+      Handler: lambda_function.lambda_handler
+      Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/${LabRoleName}"
+      Code: { S3Bucket: !Ref ArtifactsBucket, S3Key: !Ref LambdaZipKey }
+      Timeout: 900
+      MemorySize: 2048
+      VpcConfig:
+        SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+        SecurityGroupIds: [!Ref LambdaSecurityGroup]
+      Environment:
+        Variables:
+          DB_HOST: !GetAtt Database.Endpoint.Address
+          DB_PORT: !GetAtt Database.Endpoint.Port
+          DB_NAME: postgres
+          DB_USER: !Ref DBUsername
+          DB_PASS: !Ref DBPassword
+          DB_SCHEMA: data_warehouse
+          DYNAMODB_TABLE: !Ref UserLoginTable
+    DependsOn: [PrivateRtAssoc1, PrivateRtAssoc2, S3Endpoint, DynamoDbEndpoint]
+
+  # Runs once (and on every stack update that bumps SchemaVersion): creates the
+  # data_warehouse schema + dim_date and seeds the first login user.
+  SchemaInit:
+    Type: Custom::SchemaInit
+    DependsOn: [Database, UserLoginTable]
+    Properties:
+      ServiceToken: !GetAtt EtlFunction.Arn
+      SchemaVersion: 1
+      AdminUsername: !Ref AdminUsername
+      AdminName: !Ref AdminName
+      AdminPassword: !Ref AdminPassword
+
+  EtlStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub "${ProjectName}-etl"
+      StateMachineType: STANDARD
+      RoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/${LabRoleName}"
+      DefinitionString: !Sub |
+        {
+          "Comment": "CSV uploaded to S3 -> Lambda ETL -> RDS data warehouse",
+          "StartAt": "RunETL",
+          "States": {
+            "RunETL": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": { "FunctionName": "${EtlFunction.Arn}", "Payload.$": "$" },
+              "ResultSelector": { "etl.$": "$.Payload" },
+              "TimeoutSeconds": 900,
+              "Retry": [
+                {
+                  "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "OperationalError", "InterfaceError"],
+                  "IntervalSeconds": 10,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2
+                }
+              ],
+              "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "ETLFailed" }],
+              "Next": "ETLSucceeded"
+            },
+            "ETLSucceeded": { "Type": "Succeed" },
+            "ETLFailed": { "Type": "Fail", "Error": "ETLFailed", "Cause": "ETL Lambda failed - open the execution to see the error" }
+          }
+        }
+
+  CsvUploadRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${ProjectName}-csv-uploaded"
+      Description: New CSV under csv-uploads/ starts the ETL state machine
+      State: ENABLED
+      EventPattern:
+        source: [aws.s3]
+        detail-type: ["Object Created"]
+        detail:
+          bucket: { name: [!Ref CsvBucket] }
+          object: { key: [{ prefix: csv-uploads/ }] }
+      Targets:
+        - Id: StartEtl
+          Arn: !Ref EtlStateMachine
+          RoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/${LabRoleName}"
+
+  # ------------------------------ ALB + Auto Scaling group (web server & AI agent)
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${ProjectName}-alb"
+      Type: application
+      Scheme: internet-facing
+      Subnets: [!Ref PublicSubnet1, !Ref PublicSubnet2]
+      SecurityGroups: [!Ref AlbSecurityGroup]
+    DependsOn: IgwAttachment
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${ProjectName}-web-tg"
+      VpcId: !Ref Vpc
+      Protocol: HTTP
+      Port: 3000
+      TargetType: instance
+      HealthCheckPath: /healthz
+      HealthCheckIntervalSeconds: 15
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher: { HttpCode: "200" }
+      TargetGroupAttributes:
+        - { Key: deregistration_delay.timeout_seconds, Value: "30" }
+        - { Key: stickiness.enabled, Value: "true" }
+        - { Key: stickiness.type, Value: lb_cookie }
+        - { Key: stickiness.lb_cookie.duration_seconds, Value: "86400" }
+
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Protocol: HTTP
+      Port: 80
+      DefaultActions: [{ Type: forward, TargetGroupArn: !Ref TargetGroup }]
+
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub "${ProjectName}-web-ai"
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: !Ref InstanceType
+        KeyName: !If [HasKeyName, !Ref KeyName, !Ref AWS::NoValue]
+        IamInstanceProfile: { Name: !Ref InstanceProfileName }
+        MetadataOptions: { HttpTokens: required, HttpPutResponseHopLimit: 2 }
+        NetworkInterfaces:
+          - DeviceIndex: 0
+            AssociatePublicIpAddress: true
+            Groups: [!Ref WebSecurityGroup]
+        TagSpecifications:
+          - ResourceType: instance
+            Tags: [{ Key: Name, Value: !Sub "${ProjectName}-web-ai" }]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            exec > >(tee /var/log/agrichain-bootstrap.log) 2>&1
+            set -eux
+            export AWS_DEFAULT_REGION=${AWS::Region}
+
+            dnf install -y unzip python3.11 python3.11-pip
+            dnf install -y nodejs22 nodejs22-npm || dnf install -y nodejs20 nodejs20-npm || dnf install -y nodejs npm
+
+            id agri || useradd --system --home-dir /opt/agrichain agri
+            mkdir -p /opt/agrichain
+            aws s3 cp s3://${ArtifactsBucket}/${AppZipKey} /tmp/app.zip
+            unzip -oq /tmp/app.zip -d /opt/agrichain
+            cd /opt/agrichain
+
+            DB_PASS=$(aws ssm get-parameter --name ${DbPasswordParam} --with-decryption --query Parameter.Value --output text)
+            GROQ_KEY=$(aws ssm get-parameter --name ${GroqApiKeyParam} --with-decryption --query Parameter.Value --output text)
+
+            cat > .env <<EOF
+            APP_NAME=agri-dw-llm-agent
+            APP_ENV=cloud
+            LOG_LEVEL=INFO
+            CORS_ORIGINS=http://${LoadBalancer.DNSName}
+            LLM_PROVIDER=qwen
+            GROQ_API_KEY=$GROQ_KEY
+            DATABASE_URL=postgresql+psycopg://${DBUsername}:$DB_PASS@${Database.Endpoint.Address}:${Database.Endpoint.Port}/postgres?sslmode=require
+            DATABASE_SCHEMA=data_warehouse
+            MAX_SQL_ROWS=100
+            MAX_SQL_SECONDS=15
+            PORT=3000
+            AWS_REGION=${AWS::Region}
+            S3_BUCKET_NAME=${CsvBucket}
+            DYNAMODB_TABLE=${UserLoginTable}
+            SESSION_TABLE=${UserSessionTable}
+            CHAT_TABLE=${ChatHistoryTable}
+            DEPLOY_ID=${AWS::StackName}
+            EOF
+            chmod 600 .env
+
+            npm ci --omit=dev
+            python3.11 -m venv .venv
+            .venv/bin/pip install --no-cache-dir -r requirements.txt
+            chown -R agri:agri /opt/agrichain
+
+            # AI agent (FastAPI) listens on loopback only; the Node server proxies to it
+            cat > /etc/systemd/system/agrichain-ai.service <<EOF
+            [Unit]
+            Description=AgriChain AI agent (FastAPI)
+            After=network-online.target
+            [Service]
+            User=agri
+            WorkingDirectory=/opt/agrichain
+            ExecStart=/opt/agrichain/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+            Restart=always
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+
+            cat > /etc/systemd/system/agrichain-web.service <<EOF
+            [Unit]
+            Description=AgriChain web server (Express)
+            After=network-online.target agrichain-ai.service
+            [Service]
+            User=agri
+            WorkingDirectory=/opt/agrichain
+            ExecStart=/usr/bin/node server.js
+            Restart=always
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+
+            systemctl daemon-reload
+            systemctl enable --now agrichain-ai agrichain-web
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn: [SchemaInit, Listener, PublicDefaultRoute]
+    Properties:
+      AutoScalingGroupName: !Sub "${ProjectName}-asg"
+      MinSize: "1"
+      MaxSize: "4"
+      DesiredCapacity: !Ref DesiredCapacity
+      VPCZoneIdentifier: [!Ref PublicSubnet1, !Ref PublicSubnet2]
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      TargetGroupARNs: [!Ref TargetGroup]
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 600
+      Tags:
+        - { Key: Name, Value: !Sub "${ProjectName}-web-ai", PropagateAtLaunch: true }
+
+  CpuScalingPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification: { PredefinedMetricType: ASGAverageCPUUtilization }
+        TargetValue: 60
+
+Outputs:
+  WebsiteUrl:
+    Description: Open this in a browser (Application Load Balancer)
+    Value: !Sub "http://${LoadBalancer.DNSName}"
+  CsvBucketName:
+    Value: !Ref CsvBucket
+  RdsEndpoint:
+    Value: !GetAtt Database.Endpoint.Address
+  EtlStateMachineArn:
+    Value: !Ref EtlStateMachine

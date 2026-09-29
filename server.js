@@ -1,13 +1,16 @@
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
-const { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command } = require('@aws-sdk/client-s3');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, GetCommand, PutCommand } = require('@aws-sdk/lib-dynamodb');
+const {
+    DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, DeleteCommand, QueryCommand, BatchWriteCommand
+} = require('@aws-sdk/lib-dynamodb');
 
 const app = express();
 app.use(cors());
@@ -39,33 +42,186 @@ if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
 
 const s3Client = new S3Client(awsConfig);
 const dbClient = new DynamoDBClient(awsConfig);
-const docClient = DynamoDBDocumentClient.from(dbClient);
+const docClient = DynamoDBDocumentClient.from(dbClient, { marshallOptions: { removeUndefinedValues: true } });
 
 const upload = multer({ storage: multer.memoryStorage() });
 
 // ==========================================
-// In-Memory Storage & Server Session Tracking
-// (ข้อมูลคงอยู่ตลอดจนกว่าจะ Stop/Restart Server ตามโจทย์ผู้ใช้)
+// Stateless design: this server runs on several EC2 instances behind the ALB
+// (Auto Scaling group), so nothing is kept in process memory.
+//   - login + sessions + chat history -> DynamoDB
+//   - uploaded file list              -> S3
 // ==========================================
-const SERVER_INSTANCE_ID = 'srv_' + Date.now();
-let chatHistory = [];
-let uploadedFiles = [];
+const USER_TABLE = process.env.DYNAMODB_TABLE || 'user_login';
+const SESSION_TABLE = process.env.SESSION_TABLE || 'user_session';
+const CHAT_TABLE = process.env.CHAT_TABLE || 'chat_history';
+const AI_BACKEND_URL = process.env.AI_BACKEND_URL || 'http://127.0.0.1:8000';
+const CSV_PREFIX = 'csv-uploads/';
+const SESSION_COOKIE = 'agri_session';
+const SESSION_TTL_SECONDS = 8 * 60 * 60;
+// Changes only when the stack is redeployed (frontend clears its cache when it changes)
+const DEPLOY_ID = process.env.DEPLOY_ID || 'local';
 
-// Middleware ตั้งค่า Cookie server_instance_id เพื่อให้ Browser ตรวจสอบสถานะการ Restart ได้
-app.use((req, res, next) => {
-    res.setHeader('Set-Cookie', `server_instance_id=${SERVER_INSTANCE_ID}; Path=/; SameSite=Lax`);
-    next();
+// ---- password hashing (format shared with lambda/etl: scrypt$N$r$p$saltHex$hashHex)
+function hashPassword(password) {
+    const salt = crypto.randomBytes(16);
+    const hash = crypto.scryptSync(password, salt, 64, { N: 16384, r: 8, p: 1 });
+    return `scrypt$16384$8$1$${salt.toString('hex')}$${hash.toString('hex')}`;
+}
+
+function verifyPassword(stored, supplied) {
+    if (typeof stored !== 'string' || typeof supplied !== 'string') return false;
+    if (stored.startsWith('scrypt$')) {
+        const [, N, r, p, saltHex, hashHex] = stored.split('$');
+        const expected = Buffer.from(hashHex, 'hex');
+        const actual = crypto.scryptSync(supplied, Buffer.from(saltHex, 'hex'), expected.length,
+            { N: Number(N), r: Number(r), p: Number(p) });
+        return crypto.timingSafeEqual(actual, expected);
+    }
+    // legacy plaintext record (upgraded to a hash on next successful login)
+    const digest = (s) => crypto.createHash('sha256').update(s).digest();
+    return crypto.timingSafeEqual(digest(stored), digest(supplied));
+}
+
+// ---- session helpers
+function getCookie(req, name) {
+    const part = (req.headers.cookie || '').split(/;\s*/).find((c) => c.startsWith(name + '='));
+    return part ? decodeURIComponent(part.slice(name.length + 1)) : null;
+}
+
+async function createSession(user) {
+    const token = crypto.randomBytes(32).toString('hex');
+    await docClient.send(new PutCommand({
+        TableName: SESSION_TABLE,
+        Item: {
+            token,
+            username: user.username,
+            name: user.name,
+            role: user.role,
+            createdAt: new Date().toISOString(),
+            expiresAt: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS // DynamoDB TTL attribute
+        }
+    }));
+    return token;
+}
+
+async function loadSession(req) {
+    const token = getCookie(req, SESSION_COOKIE);
+    if (!token) return null;
+    const { Item } = await docClient.send(new GetCommand({ TableName: SESSION_TABLE, Key: { token } }));
+    // TTL deletion can lag by hours, so also check expiry here
+    if (!Item || Item.expiresAt < Math.floor(Date.now() / 1000)) return null;
+    return Item;
+}
+
+// ELB health check (no auth). Reports the local AI agent state without failing on it.
+app.get('/healthz', async (req, res) => {
+    let ai = 'down';
+    try {
+        const r = await fetch(`${AI_BACKEND_URL}/health`, { signal: AbortSignal.timeout(2000) });
+        ai = r.ok ? 'ok' : 'error';
+    } catch (e) { /* AI agent still starting */ }
+    res.json({ status: 'ok', ai });
 });
 
-// Endpoint สำหรับเช็คสถานะเซิร์ฟเวอร์และดึง Session ID
+// Every /api route except login/register requires a valid DynamoDB-backed session ("Verify Auth")
+const PUBLIC_API = new Set(['/login', '/register', '/session-info', '/logout']);
+app.use('/api', async (req, res, next) => {
+    if (PUBLIC_API.has(req.path)) return next();
+    try {
+        const session = await loadSession(req);
+        if (!session) return res.status(401).json({ success: false, message: 'กรุณาเข้าสู่ระบบ' });
+        req.user = session;
+        next();
+    } catch (err) {
+        console.error('Session verification error:', err);
+        res.status(500).json({ success: false, message: 'ตรวจสอบสิทธิ์ผ่าน DynamoDB ไม่สำเร็จ: ' + err.message });
+    }
+});
+
+// Endpoint สำหรับเช็คสถานะเซิร์ฟเวอร์ (frontend ล้างแคชเมื่อ deploy ใหม่)
 app.get('/api/session-info', (req, res) => {
-    res.json({
-        success: true,
-        serverInstanceId: SERVER_INSTANCE_ID,
-        chatCount: chatHistory.length,
-        filesCount: uploadedFiles.length
-    });
+    res.json({ success: true, serverInstanceId: DEPLOY_ID });
 });
+
+app.post('/api/logout', async (req, res) => {
+    const token = getCookie(req, SESSION_COOKIE);
+    try {
+        if (token) await docClient.send(new DeleteCommand({ TableName: SESSION_TABLE, Key: { token } }));
+    } catch (err) {
+        console.error('Logout error:', err);
+    }
+    res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+    res.json({ success: true });
+});
+
+app.get('/api/me', (req, res) => {
+    res.json({ success: true, user: { username: req.user.username, name: req.user.name, role: req.user.role } });
+});
+
+// ---- S3 upload list (replaces the old per-process array)
+const formatSize = (bytes) => (bytes / (1024 * 1024) >= 1)
+    ? (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+    : (bytes / 1024).toFixed(1) + ' KB';
+
+const formatTime = (date) => date.toLocaleTimeString('en-GB',
+    { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Bangkok' });
+
+async function listUploadedFiles() {
+    const out = await s3Client.send(new ListObjectsV2Command({
+        Bucket: process.env.S3_BUCKET_NAME,
+        Prefix: CSV_PREFIX
+    }));
+    return (out.Contents || [])
+        .filter((o) => o.Key.toLowerCase().endsWith('.csv'))
+        .sort((a, b) => b.LastModified - a.LastModified)
+        .slice(0, 100)
+        .map((o) => ({
+            name: o.Key.slice(CSV_PREFIX.length).replace(/^\d+_/, ''),
+            key: o.Key,
+            size: formatSize(o.Size),
+            time: formatTime(o.LastModified),
+            status: 'success'
+        }));
+}
+
+// ---- chat history in DynamoDB (partition: username, sort: ts)
+async function saveChat(username, record) {
+    await docClient.send(new PutCommand({ TableName: CHAT_TABLE, Item: { username, ts: record.id, ...record } }));
+}
+
+async function loadChat(username, limit = 100) {
+    const out = await docClient.send(new QueryCommand({
+        TableName: CHAT_TABLE,
+        KeyConditionExpression: 'username = :u',
+        ExpressionAttributeValues: { ':u': username },
+        ScanIndexForward: false,
+        Limit: limit
+    }));
+    return (out.Items || []).reverse().map(({ username: _u, ts: _t, ...rest }) => rest);
+}
+
+async function clearChat(username) {
+    let lastKey;
+    do {
+        const page = await docClient.send(new QueryCommand({
+            TableName: CHAT_TABLE,
+            KeyConditionExpression: 'username = :u',
+            ExpressionAttributeValues: { ':u': username },
+            ProjectionExpression: 'username, ts',
+            ExclusiveStartKey: lastKey
+        }));
+        const items = page.Items || [];
+        for (let i = 0; i < items.length; i += 25) {
+            await docClient.send(new BatchWriteCommand({
+                RequestItems: {
+                    [CHAT_TABLE]: items.slice(i, i + 25).map((Key) => ({ DeleteRequest: { Key } }))
+                }
+            }));
+        }
+        lastKey = page.LastEvaluatedKey;
+    } while (lastKey);
+}
 
 // Redirect dashboard.html -> inventory.html
 app.get('/dashboard.html', (req, res) => {
@@ -99,7 +255,7 @@ app.post('/api/login', async (req, res) => {
 
     try {
         const command = new GetCommand({
-            TableName: process.env.DYNAMODB_TABLE || 'user_login',
+            TableName: USER_TABLE,
             Key: { username: cleanUsername }
         });
 
@@ -109,15 +265,25 @@ app.post('/api/login', async (req, res) => {
             return res.status(401).json({ success: false, message: 'ไม่พบชื่อผู้ใช้งานนี้' });
         }
 
-        if (response.Item.password === password) {
-            res.json({
-                success: true,
-                user: {
-                    username: response.Item.username,
-                    name: response.Item.name || response.Item.username,
-                    role: response.Item.role || 'User'
-                }
-            });
+        if (verifyPassword(response.Item.password, password)) {
+            if (!response.Item.password.startsWith('scrypt$')) {
+                await docClient.send(new UpdateCommand({
+                    TableName: USER_TABLE,
+                    Key: { username: cleanUsername },
+                    UpdateExpression: 'SET password = :p',
+                    ExpressionAttributeValues: { ':p': hashPassword(password) }
+                }));
+            }
+
+            const user = {
+                username: response.Item.username,
+                name: response.Item.name || response.Item.username,
+                role: response.Item.role || 'User'
+            };
+            const token = await createSession(user);
+            res.setHeader('Set-Cookie',
+                `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}`);
+            res.json({ success: true, user });
         } else {
             res.status(401).json({ success: false, message: 'รหัสผ่านไม่ถูกต้อง' });
         }
@@ -139,7 +305,7 @@ app.post('/api/register', async (req, res) => {
 
     try {
         const checkCommand = new GetCommand({
-            TableName: process.env.DYNAMODB_TABLE || 'user_login',
+            TableName: USER_TABLE,
             Key: { username: email.toLowerCase().trim() }
         });
         const existingUser = await docClient.send(checkCommand);
@@ -149,14 +315,15 @@ app.post('/api/register', async (req, res) => {
         }
 
         const putCommand = new PutCommand({
-            TableName: process.env.DYNAMODB_TABLE,
+            TableName: USER_TABLE,
             Item: {
                 username: email.toLowerCase().trim(),
-                password: password,
+                password: hashPassword(password),
                 name: name.trim(),
                 role: role,
                 createdAt: new Date().toISOString()
-            }
+            },
+            ConditionExpression: 'attribute_not_exists(username)'
         });
 
         await docClient.send(putCommand);
@@ -174,31 +341,28 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/upload', upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'กรุณาเลือกไฟล์' });
 
+    if (!req.file.originalname.toLowerCase().endsWith('.csv')) {
+        return res.status(400).json({ success: false, message: 'รองรับเฉพาะไฟล์ .csv' });
+    }
+
     const params = {
         Bucket: process.env.S3_BUCKET_NAME,
-        Key: `csv-uploads/${Date.now()}_${req.file.originalname}`,
+        Key: `${CSV_PREFIX}${Date.now()}_${req.file.originalname}`,
         Body: req.file.buffer,
         ContentType: 'text/csv'
     };
 
     try {
+        // The S3 "Object Created" event (EventBridge) starts the Step Functions ETL automatically
         await s3Client.send(new PutObjectCommand(params));
-        
-        const sizeFormatted = (req.file.size / (1024 * 1024) >= 1)
-            ? (req.file.size / (1024 * 1024)).toFixed(1) + ' MB'
-            : (req.file.size / 1024).toFixed(1) + ' KB';
-        const now = new Date();
-        const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-        
+
         const fileItem = {
             name: req.file.originalname,
             key: params.Key,
-            size: sizeFormatted,
-            time: timeStr,
+            size: formatSize(req.file.size),
+            time: formatTime(new Date()),
             status: 'success'
         };
-        uploadedFiles.unshift(fileItem);
-        if (uploadedFiles.length > 100) uploadedFiles.pop();
 
         res.json({ success: true, filename: req.file.originalname, key: params.Key, file: fileItem });
     } catch (err) {
@@ -207,9 +371,14 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     }
 });
 
-// ดึงรายการไฟล์ที่อัปโหลดไว้ (In-Memory)
-app.get('/api/uploads', (req, res) => {
-    res.json({ success: true, files: uploadedFiles });
+// ดึงรายการไฟล์ที่อัปโหลดไว้ (อ่านจาก S3 โดยตรง)
+app.get('/api/uploads', async (req, res) => {
+    try {
+        res.json({ success: true, files: await listUploadedFiles() });
+    } catch (err) {
+        console.error('S3 List Error:', err);
+        res.status(500).json({ success: false, message: 'ไม่สามารถอ่านรายการไฟล์จาก S3 ได้: ' + err.message });
+    }
 });
 
 // ==========================================
@@ -256,7 +425,6 @@ app.delete('/api/delete', async (req, res) => {
 
     try {
         await s3Client.send(new DeleteObjectCommand(params));
-        uploadedFiles = uploadedFiles.filter(f => f.key !== key);
         res.json({ success: true, message: 'ลบไฟล์ออกจาก S3 เรียบร้อยแล้ว' });
     } catch (err) {
         console.error('S3 Delete Error:', err);
@@ -276,7 +444,7 @@ const handleAIChat = async (req, res) => {
             return res.status(400).json({ success: false, message: 'กรุณากรอกคำถาม' });
         }
 
-        const cloudResponse = await fetch('http://localhost:8000/ask', {
+        const cloudResponse = await fetch(`${AI_BACKEND_URL}/ask`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -304,8 +472,11 @@ const handleAIChat = async (req, res) => {
             status: data.status,
             timestamp: new Date().toISOString()
         };
-        chatHistory.push(chatRecord);
-        if (chatHistory.length > 100) chatHistory.shift();
+        try {
+            await saveChat(req.user.username, chatRecord);
+        } catch (err) {
+            console.error('Chat history save failed (answer still returned):', err.message);
+        }
 
         res.json({
             success: true,
@@ -330,15 +501,25 @@ const handleAIChat = async (req, res) => {
 app.post('/api/ai/ask', handleAIChat);
 app.post('/api/chat', handleAIChat);
 
-// ดึงประวัติการแชตกับ AI (In-Memory)
-app.get('/api/chat/history', (req, res) => {
-    res.json({ success: true, history: chatHistory });
+// ดึงประวัติการแชตกับ AI ของผู้ใช้ที่ล็อกอิน (DynamoDB)
+app.get('/api/chat/history', async (req, res) => {
+    try {
+        res.json({ success: true, history: await loadChat(req.user.username) });
+    } catch (err) {
+        console.error('Chat history load error:', err);
+        res.status(500).json({ success: false, message: 'ไม่สามารถอ่านประวัติการคุยได้: ' + err.message });
+    }
 });
 
 // ล้างประวัติการแชต
-app.delete('/api/chat/history', (req, res) => {
-    chatHistory = [];
-    res.json({ success: true, message: 'ล้างประวัติการคุยเรียบร้อยแล้ว' });
+app.delete('/api/chat/history', async (req, res) => {
+    try {
+        await clearChat(req.user.username);
+        res.json({ success: true, message: 'ล้างประวัติการคุยเรียบร้อยแล้ว' });
+    } catch (err) {
+        console.error('Chat history clear error:', err);
+        res.status(500).json({ success: false, message: 'ไม่สามารถล้างประวัติการคุยได้: ' + err.message });
+    }
 });
 
 // ==========================================
@@ -346,7 +527,8 @@ app.delete('/api/chat/history', (req, res) => {
 // ==========================================
 app.get('/api/dashboard-data', async (req, res) => {
     try {
-        // ค้นหาไฟล์ CSV ล่าสุดที่อัปโหลดใน uploadedFiles
+        // ค้นหาไฟล์ CSV ล่าสุดใน S3
+        const uploadedFiles = await listUploadedFiles();
         if (uploadedFiles.length === 0) {
             return res.status(404).json({ success: false, message: 'ยังไม่มีไฟล์ CSV ในระบบ' });
         }
@@ -383,18 +565,26 @@ app.get('/api/dashboard-data', async (req, res) => {
 // ==========================================
 const { Pool } = require('pg');
 
-// ปิดการตรวจสอบ SSL เฉพาะ Node.js และจัดการ URL
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-const nodeDbUrl = process.env.DATABASE_URL
-    .replace('postgresql+psycopg://', 'postgresql://')
-    .replace('?sslmode=require', '');
+// Same schema the Lambda ETL loads and the AI agent queries
+const DB_SCHEMA = process.env.DB_SCHEMA || process.env.DATABASE_SCHEMA || 'public';
+if (!/^[a-z_][a-z0-9_]*$/i.test(DB_SCHEMA)) throw new Error('Invalid DB_SCHEMA: ' + DB_SCHEMA);
 
-const pool = new Pool({
-    connectionString: nodeDbUrl,
-    ssl: { rejectUnauthorized: false }
-});
+// RDS is private to the VPC; SSL is used but the AWS CA is not pinned (only this pool, not the AWS SDK)
+const pool = process.env.DATABASE_URL
+    ? new Pool({
+        connectionString: process.env.DATABASE_URL
+            .replace('postgresql+psycopg://', 'postgresql://')
+            .replace(/\?sslmode=require$/, ''),
+        ssl: { rejectUnauthorized: false },
+        max: 5,
+        connectionTimeoutMillis: 5000
+    })
+    : null;
 
 app.get('/api/dashboard', async (req, res) => {
+    if (!pool) {
+        return res.status(503).json({ success: false, message: 'ยังไม่ได้ตั้งค่า DATABASE_URL' });
+    }
     try {
         // 1. รับค่าตัวกรองจากหน้าเว็บ
         const { date, warehouse, crop } = req.query;
@@ -407,12 +597,12 @@ app.get('/api/dashboard', async (req, res) => {
             // ตัวกรองที่ 1: หมวดหมู่ผลผลิต
             if (crop && crop !== 'all') {
                 const catTh = crop === 'grain' ? 'ธัญพืช' : (crop === 'fruit' ? 'ผลไม้' : 'ผัก');
-                conditions.push(`${prefix}crop_sk IN (SELECT crop_sk FROM public.dim_crop WHERE category = '${catTh}')`);
+                conditions.push(`${prefix}crop_sk IN (SELECT crop_sk FROM ${DB_SCHEMA}.dim_crop WHERE category = '${catTh}')`);
             }
 
             // ตัวกรองที่ 2: คลังสินค้า (ถ้ามีตัวเลือกเพิ่มในอนาคต โค้ดนี้ก็พร้อมทำงาน)
-            if (warehouse && warehouse !== 'all') {
-                conditions.push(`${prefix}warehouse_sk IN (SELECT warehouse_sk FROM public.dim_warehouse WHERE warehouse_id = '${warehouse}')`);
+            if (warehouse && warehouse !== 'all' && /^[A-Za-z0-9_-]+$/.test(warehouse)) {
+                conditions.push(`${prefix}warehouse_sk IN (SELECT warehouse_sk FROM ${DB_SCHEMA}.dim_warehouse WHERE warehouse_id = '${warehouse}')`);
             }
 
             // ตัวกรองที่ 3: ช่วงเวลา 
@@ -420,11 +610,11 @@ app.get('/api/dashboard', async (req, res) => {
             const mockToday = "'2025-12-31'::date";
 
             if (date === 'month') {
-                conditions.push(`${prefix}${dateColumn} IN (SELECT date_key FROM public.dim_date WHERE month = EXTRACT(MONTH FROM ${mockToday}) AND year = EXTRACT(YEAR FROM ${mockToday}))`);
+                conditions.push(`${prefix}${dateColumn} IN (SELECT date_key FROM ${DB_SCHEMA}.dim_date WHERE month = EXTRACT(MONTH FROM ${mockToday}) AND year = EXTRACT(YEAR FROM ${mockToday}))`);
             } else if (date === 'quarter') {
-                conditions.push(`${prefix}${dateColumn} IN (SELECT date_key FROM public.dim_date WHERE quarter = EXTRACT(QUARTER FROM ${mockToday}) AND year = EXTRACT(YEAR FROM ${mockToday}))`);
+                conditions.push(`${prefix}${dateColumn} IN (SELECT date_key FROM ${DB_SCHEMA}.dim_date WHERE quarter = EXTRACT(QUARTER FROM ${mockToday}) AND year = EXTRACT(YEAR FROM ${mockToday}))`);
             } else if (date === 'year') {
-                conditions.push(`${prefix}${dateColumn} IN (SELECT date_key FROM public.dim_date WHERE year = EXTRACT(YEAR FROM ${mockToday}))`);
+                conditions.push(`${prefix}${dateColumn} IN (SELECT date_key FROM ${DB_SCHEMA}.dim_date WHERE year = EXTRACT(YEAR FROM ${mockToday}))`);
             }
 
             return conditions.length > 0 ? "WHERE " + conditions.join(" AND ") : "";
@@ -441,14 +631,14 @@ app.get('/api/dashboard', async (req, res) => {
                 COALESCE(SUM(total_amount_thb), 0) AS amount, 
                 COALESCE(SUM(quantity_kg), 0) / 1000 AS qty_ton, 
                 COALESCE(AVG(price_per_kg), 0) AS avg_price 
-            FROM public.fact_harvest
+            FROM ${DB_SCHEMA}.fact_harvest
             ${harvestWhere}
         `);
 
         const cropQuery = await pool.query(`
             SELECT c.crop_name, COALESCE(SUM(h.quantity_kg), 0) / 1000 AS qty_ton
-            FROM public.fact_harvest h
-            JOIN public.dim_crop c ON h.crop_sk = c.crop_sk
+            FROM ${DB_SCHEMA}.fact_harvest h
+            JOIN ${DB_SCHEMA}.dim_crop c ON h.crop_sk = c.crop_sk
             ${harvestWhereAlias} 
             GROUP BY c.crop_name
         `);
@@ -459,13 +649,13 @@ app.get('/api/dashboard', async (req, res) => {
             SELECT 
                 COALESCE(SUM(total_amount_thb), 0) AS amount, 
                 COALESCE(SUM(quantity_kg), 0) / 1000 AS qty_ton 
-            FROM public.fact_sales
+            FROM ${DB_SCHEMA}.fact_sales
             ${salesWhere}
         `);
 
         const shipKpi = await pool.query(`
             SELECT COALESCE(SUM(shipping_cost_thb), 0) AS shipping 
-            FROM public.fact_shipment
+            FROM ${DB_SCHEMA}.fact_shipment
             ${shipWhere}
         `);
 

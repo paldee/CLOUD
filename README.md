@@ -27,6 +27,11 @@ flowchart TD
 
 ---
 
+> **Deploy ตามสถาปัตยกรรมบน AWS:** ดู [docs/aws_architecture_deployment.md](docs/aws_architecture_deployment.md) (`python infra/deploy.py`)
+> — ส่วนคู่มือ `docs/rds_cloud_deployment_flow.md` เป็นวิธีแบบ single-EC2 รุ่นทดลอง
+
+---
+
 ## ความสามารถหลักของระบบ
 
 1. **Natural Language to SQL (Text-to-SQL)**:
