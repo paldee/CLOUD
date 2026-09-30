@@ -1063,7 +1063,7 @@
 
             // 3. ถ้าต้องดึงจาก AWS S3 หรือ API
             if (s3Key) {
-                const apiBase = (window.location.port === '3000' || window.location.pathname.startsWith('/api')) ? '' : 'http://localhost:3000';
+                const apiBase = ''; // same origin: the page is served by the same Express server (ALB or localhost)
                 fetch(`${apiBase}/api/file-content?key=${encodeURIComponent(s3Key)}`)
                     .then(res => {
                         if (!res.ok) throw new Error('Cannot fetch S3');
