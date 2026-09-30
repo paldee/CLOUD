@@ -13,3 +13,30 @@
         });
     };
 })();
+
+
+// Hide sidebar links the signed-in role cannot open (the server enforces it as well)
+(function () {
+    var PAGES = {
+        'data admin': ['/inventory.html'],
+        'admin': ['/inventory.html'],
+        'executive': ['/dashboard.html', '/agent.html'],
+        'data analyst': ['/dashboard.html', '/agent.html']
+    };
+    function apply() {
+        var user = null;
+        try { user = JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { /* ignore */ }
+        var roleName = user && String(user.role || '').trim().toLowerCase();
+        var allowed = roleName && PAGES[roleName];
+        if (!allowed) return;
+        document.querySelectorAll('.nav-item a[href]').forEach(function (a) {
+            var m = /^\/?(dashboard|inventory|agent)\.html(?:[?#].*)?$/.exec(a.getAttribute('href') || '');
+            if (m && allowed.indexOf('/' + m[1] + '.html') === -1) {
+                var li = a.closest('li');
+                if (li) li.style.display = 'none';
+            }
+        });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);
+    else apply();
+})();

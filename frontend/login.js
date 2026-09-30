@@ -68,7 +68,10 @@ loginForm.addEventListener("submit", async (e) => {
             localStorage.setItem("currentUser", JSON.stringify(data.user));
             loginMessage.style.color = "#2d5028";
             loginMessage.textContent = window.t("loginSuccess");
-            setTimeout(() => { location.href = "inventory.html"; }, 900);
+            // each role lands on its own page (Data Admin: upload, Executive/Data Analyst: dashboard)
+            const roleName = String((data.user && data.user.role) || "").trim().toLowerCase();
+            const isAdmin = roleName === "data admin" || roleName === "admin";
+            setTimeout(() => { location.href = isAdmin ? "inventory.html" : "dashboard.html"; }, 900);
         } else {
             submitBtn.disabled = false;
             submitBtn.textContent = originalText;

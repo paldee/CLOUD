@@ -16,6 +16,57 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ==========================================
+// Role based access (see use case diagram): each role reaches a different set of pages.
+//   Data Admin              -> upload page only (login, upload dataset, check load errors)
+//   Executive / Data Analyst -> dashboard + AI agent
+// Page content is unchanged; only which pages/APIs a role may open.
+// ==========================================
+const ANALYST_ACCESS = {
+    home: '/dashboard.html',
+    pages: ['/dashboard.html', '/agent.html'],
+    api: ['/dashboard', '/dashboard-data', '/chat', '/ai']
+};
+const ROLE_ACCESS = {
+    'Data Admin': {
+        home: '/inventory.html',
+        pages: ['/inventory.html'],
+        api: ['/upload', '/uploads', '/file-content', '/delete']
+    },
+    'Executive': ANALYST_ACCESS,
+    'Data Analyst': ANALYST_ACCESS
+};
+const ROLE_ALIAS = { 'Admin': 'Data Admin' }; // role written by the first deploy's seed user
+const ALWAYS_API = ['/me'];
+
+// DynamoDB items are typed by hand, so tolerate stray spaces and letter case in the role value
+const normalizeRole = (role) => String(role || '').trim().replace(/\s+/g, ' ').toLowerCase();
+const ROLE_LOOKUP = new Map(Object.entries(ROLE_ACCESS).map(([k, v]) => [normalizeRole(k), v]));
+Object.entries(ROLE_ALIAS).forEach(([k, v]) => ROLE_LOOKUP.set(normalizeRole(k), ROLE_ACCESS[v]));
+
+function accessFor(role) {
+    return ROLE_LOOKUP.get(normalizeRole(role)) || ANALYST_ACCESS;
+}
+const underPrefix = (p, list) => list.some((x) => p === x || p.startsWith(x + '/'));
+
+// HTML pages: no session -> login page; wrong role -> that role's own home page
+app.use(async (req, res, next) => {
+    if (req.method !== 'GET') return next();
+    const pagePath = req.path === '/dashboard' ? '/dashboard.html' : req.path;
+    if (!['/dashboard.html', '/inventory.html', '/agent.html'].includes(pagePath)) return next();
+    try {
+        const session = await loadSession(req);
+        if (!session) return res.redirect('/index.html');
+        const access = accessFor(session.role);
+        if (!access.pages.includes(pagePath)) return res.redirect(access.home);
+        if (req.path !== pagePath) return res.redirect(pagePath);
+        next();
+    } catch (err) {
+        console.error('Page access check error:', err);
+        res.status(500).send('ตรวจสอบสิทธิ์ไม่สำเร็จ');
+    }
+});
+
 // ดึงไฟล์ HTML ในโฟลเดอร์ frontend หรือ public มาแสดงผล
 const staticDir = fs.existsSync(path.join(__dirname, 'frontend')) ? 'frontend' : 'public';
 app.use(express.static(staticDir));
@@ -132,6 +183,10 @@ app.use('/api', async (req, res, next) => {
         const session = await loadSession(req);
         if (!session) return res.status(401).json({ success: false, message: 'กรุณาเข้าสู่ระบบ' });
         req.user = session;
+        const access = accessFor(session.role);
+        if (!underPrefix(req.path, [...ALWAYS_API, ...access.api])) {
+            return res.status(403).json({ success: false, message: 'บทบาทของคุณไม่มีสิทธิ์ใช้งานส่วนนี้' });
+        }
         next();
     } catch (err) {
         console.error('Session verification error:', err);
@@ -222,14 +277,6 @@ async function clearChat(username) {
         lastKey = page.LastEvaluatedKey;
     } while (lastKey);
 }
-
-// Redirect dashboard.html -> inventory.html
-app.get('/dashboard.html', (req, res) => {
-    res.redirect(301, '/inventory.html');
-});
-app.get('/dashboard', (req, res) => {
-    res.redirect(301, '/inventory.html');
-});
 
 // Helper function เปลี่ยน S3 Body Stream เป็น Text
 const streamToString = (stream) =>
