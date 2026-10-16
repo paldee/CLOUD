@@ -2,7 +2,7 @@
 
 ระบบ AI Assistant สำหรับวิเคราะห์และสืบค้นข้อมูล Data Warehouse ห่วงโซ่อุปทานการเกษตรด้วยภาษาธรรมชาติ รองรับงาน Text-to-SQL, การสรุปผลเป็นภาษาไทย, การสร้างตารางข้อมูลและกราฟวิเคราะห์ (Chart.js) โดยเชื่อมต่อกับ **Amazon RDS PostgreSQL** และขับเคลื่อนด้วยโมเดล **Qwen (via Groq API)** ภายใต้การควบคุมความปลอดภัยด้วย Deterministic SQL Guardrails
 
-![System Architecture](assets/cloud_archetec_lastversion.png)
+![System Architecture (planned)](assets/cloud_archetec_lastversion.png)
 
 ---
 
@@ -24,6 +24,47 @@ flowchart TD
 ```
 
 ![Frontend Preview](assets/frontend_preview.png)
+
+> **AgriChain** is a serverless-style data warehouse on AWS for an agriculture supply chain: event-driven ETL (S3 → EventBridge → Step Functions → Lambda) into a star schema on Amazon RDS PostgreSQL, a role-based web portal, and a guarded Thai Text-to-SQL AI assistant. The whole stack (36 resources) deploys with one CloudFormation template.
+
+## สถาปัตยกรรมที่ติดตั้งจริงบน AWS (As-built)
+
+ภาพด้านบนเป็นสถาปัตยกรรมตามแผนที่เสนอไว้ตอนเริ่มโครงงาน ส่วนภาพนี้คือระบบที่ติดตั้งจริงบน AWS Academy Learner Lab (us-east-1) ซึ่งต่างจากแผนใน 3 จุด: ใช้ **Amazon RDS for PostgreSQL** แทน Redshift, เพิ่ม **Amazon EventBridge** ระหว่าง S3 กับ Step Functions และวาง **AWS Lambda** ไว้ใน Private Subnet เพื่อเชื่อมต่อฐานข้อมูล
+
+![AWS Architecture (as built)](assets/aws_architecture_as_built.png)
+
+ไฟล์ต้นฉบับแก้ไขได้ที่ [docs/AgriChain_AWS_Architecture.drawio](docs/AgriChain_AWS_Architecture.drawio) (เปิดด้วย draw.io)
+
+| ชั้น | บริการ | หน้าที่ |
+|---|---|---|
+| เครือข่าย | VPC 10.0.0.0/16, 2 AZ, Internet Gateway, ALB | Public Subnet สำหรับ ALB/EC2, Private Subnet สำหรับ RDS/Lambda |
+| เว็บและ AI | EC2 + Auto Scaling (1–4), Express :3000, FastAPI :8000 | พอร์ทัลเว็บ, แดชบอร์ด, ผู้ช่วย AI (Text-to-SQL) |
+| ETL | S3, EventBridge, Step Functions, Lambda (Python 3.12) | โหลด CSV เข้าคลังข้อมูลอัตโนมัติเมื่ออัปโหลดไฟล์ |
+| คลังข้อมูล | Amazon RDS for PostgreSQL | Star Schema: Fact 4 ตาราง, Dimension 5 ตาราง (SCD Type 1/2/3) |
+| ผู้ใช้/ความลับ | DynamoDB, SSM Parameter Store | บัญชีผู้ใช้/เซสชัน/ประวัติแชท และ API key |
+
+## ภาพหน้าจอระบบ
+
+| เข้าสู่ระบบ | ศูนย์อัปโหลดข้อมูล (Data Admin) |
+|---|---|
+| ![Login](assets/screenshots/01_login.png) | ![Upload center](assets/screenshots/02_upload_center.png) |
+
+| แดชบอร์ด (Data Analyst / Executive) | ผู้ช่วยวิเคราะห์ข้อมูล AI |
+|---|---|
+| ![Dashboard](assets/screenshots/03_dashboard_analyst.png) | ![AI assistant](assets/screenshots/04_ai_assistant.png) |
+
+คำถาม "ยอดขายสุทธิทั้งหมดเท่าไร" ได้ 2,958,202,618.86 บาท พร้อมคำสั่ง SQL ที่ระบบสร้างและผ่าน Guardrail ให้ตรวจสอบได้:
+
+![AI assistant with generated SQL](assets/screenshots/05_ai_assistant_sql.png)
+
+## ผลการทดสอบบน AWS
+
+- นำเข้าไฟล์ CSV ครบ 8 ไฟล์ รวม **170,504 แถว** ทุก Execution ของ Step Functions เป็น SUCCEEDED (ไฟล์ละประมาณ 1–22 วินาที)
+- แบ่งสิทธิ์ 3 บทบาท (Data Admin / Data Analyst / Executive) ตรวจที่ฝั่งเซิร์ฟเวอร์ทั้งหน้าเว็บและ API
+- ติดตั้งทั้งระบบด้วยคำสั่งเดียว (`python infra/deploy.py`) ค่าใช้จ่ายจริงตลอดการพัฒนาประมาณ $2.45
+- ข้อจำกัดที่ทราบ: ALB รับเฉพาะ HTTP, RDS เป็น Single-AZ, และกราฟบางส่วนของแดชบอร์ด (แนวโน้มรายเดือน, Top 5 สหกรณ์) ยังเป็นข้อมูลตัวอย่าง
+
+---
 
 ---
 
