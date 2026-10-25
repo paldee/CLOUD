@@ -16,7 +16,7 @@ flowchart TD
     API --> PLAN["LLM Query Planner (Qwen / Groq)"]
     PLAN --> GUARD["SQL AST Guardrails (SQLGlot)"]
     GUARD -->|Rejected| API
-    GUARD -->|Validated SELECT| RDS[("Amazon RDS PostgreSQL (Data Warehouse)")]
+    GUARD -->|Validated SELECT| RDS[("Amazon Redshift (Data Warehouse)")]
     RDS --> SUMMARY["Answer Summarizer & Chart Builder"]
     SUMMARY --> API
     API --> UI
@@ -25,11 +25,11 @@ flowchart TD
 
 ![Frontend Preview](assets/frontend_preview.png)
 
-> **AgriChain** is a serverless-style data warehouse on AWS for an agriculture supply chain: event-driven ETL (S3 → EventBridge → Step Functions → Lambda) into a star schema on Amazon RDS PostgreSQL, a role-based web portal, and a guarded Thai Text-to-SQL AI assistant. The whole stack (36 resources) deploys with one CloudFormation template.
+> **AgriChain** is a serverless-style data warehouse on AWS for an agriculture supply chain: event-driven ETL (S3 → EventBridge → Step Functions → Lambda) into a star schema on Amazon Redshift, a role-based web portal, and a guarded Thai Text-to-SQL AI assistant. The whole stack (36 resources) deploys with one CloudFormation template.
 
 ## สถาปัตยกรรมที่ติดตั้งจริงบน AWS (As-built)
 
-ภาพด้านบนเป็นสถาปัตยกรรมตามแผนที่เสนอไว้ตอนเริ่มโครงงาน ส่วนภาพนี้คือระบบที่ติดตั้งจริงบน AWS Academy Learner Lab (us-east-1) ซึ่งต่างจากแผนใน 3 จุด: ใช้ **Amazon RDS for PostgreSQL** แทน Redshift, เพิ่ม **Amazon EventBridge** ระหว่าง S3 กับ Step Functions และวาง **AWS Lambda** ไว้ใน Private Subnet เพื่อเชื่อมต่อฐานข้อมูล
+ภาพด้านบนเป็นสถาปัตยกรรมตามแผนที่เสนอไว้ตอนเริ่มโครงงาน ส่วนภาพนี้คือระบบที่ติดตั้งจริงบน AWS Academy Learner Lab (us-east-1) ซึ่งใช้ **Amazon Redshift** เป็นคลังข้อมูลตามแผน และต่างจากแผนใน 2 จุด: เพิ่ม **Amazon EventBridge** ระหว่าง S3 กับ Step Functions และวาง **AWS Lambda** ไว้ใน Private Subnet เพื่อเชื่อมต่อฐานข้อมูล
 
 ![AWS Architecture (as built)](assets/aws_architecture_as_built.png)
 
@@ -37,10 +37,10 @@ flowchart TD
 
 | ชั้น | บริการ | หน้าที่ |
 |---|---|---|
-| เครือข่าย | VPC 10.0.0.0/16, 2 AZ, Internet Gateway, ALB | Public Subnet สำหรับ ALB/EC2, Private Subnet สำหรับ RDS/Lambda |
+| เครือข่าย | VPC 10.0.0.0/16, 2 AZ, Internet Gateway, ALB | Public Subnet สำหรับ ALB/EC2, Private Subnet สำหรับ Redshift/Lambda |
 | เว็บและ AI | EC2 + Auto Scaling (1–4), Express :3000, FastAPI :8000 | พอร์ทัลเว็บ, แดชบอร์ด, ผู้ช่วย AI (Text-to-SQL) |
 | ETL | S3, EventBridge, Step Functions, Lambda (Python 3.12) | โหลด CSV เข้าคลังข้อมูลอัตโนมัติเมื่ออัปโหลดไฟล์ |
-| คลังข้อมูล | Amazon RDS for PostgreSQL | Star Schema: Fact 4 ตาราง, Dimension 5 ตาราง (SCD Type 1/2/3) |
+| คลังข้อมูล | Amazon Redshift (ra3.large, 1 โหนด) | Star Schema: Fact 4 ตาราง, Dimension 5 ตาราง (SCD Type 1/2/3) |
 | ผู้ใช้/ความลับ | DynamoDB, SSM Parameter Store | บัญชีผู้ใช้/เซสชัน/ประวัติแชท และ API key |
 
 ## ภาพหน้าจอระบบ
@@ -62,7 +62,7 @@ flowchart TD
 - นำเข้าไฟล์ CSV ครบ 8 ไฟล์ รวม **170,504 แถว** ทุก Execution ของ Step Functions เป็น SUCCEEDED (ไฟล์ละประมาณ 1–22 วินาที)
 - แบ่งสิทธิ์ 3 บทบาท (Data Admin / Data Analyst / Executive) ตรวจที่ฝั่งเซิร์ฟเวอร์ทั้งหน้าเว็บและ API
 - ติดตั้งทั้งระบบด้วยคำสั่งเดียว (`python infra/deploy.py`) ค่าใช้จ่ายจริงตลอดการพัฒนาประมาณ $2.45
-- ข้อจำกัดที่ทราบ: ALB รับเฉพาะ HTTP, RDS เป็น Single-AZ, และกราฟบางส่วนของแดชบอร์ด (แนวโน้มรายเดือน, Top 5 สหกรณ์) ยังเป็นข้อมูลตัวอย่าง
+- ข้อจำกัดที่ทราบ: ALB รับเฉพาะ HTTP, Redshift เป็นแบบโหนดเดียว (ไม่มี Multi-AZ) และคิดค่าใช้จ่ายราว $0.543/ชม. จึงควรเปิดเฉพาะเวลาใช้งาน, และกราฟบางส่วนของแดชบอร์ด (แนวโน้มรายเดือน, Top 5 สหกรณ์) ยังเป็นข้อมูลตัวอย่าง
 
 ---
 
@@ -76,7 +76,7 @@ flowchart TD
 ## ความสามารถหลักของระบบ
 
 1. **Natural Language to SQL (Text-to-SQL)**:
-   - แปลงคำถามภาษาไทยเป็นคำสั่ง PostgreSQL สำหรับ Star Schema ของ Data Warehouse
+   - แปลงคำถามภาษาไทยเป็นคำสั่ง SQL (Amazon Redshift) สำหรับ Star Schema ของ Data Warehouse
    - สรุปผลลัพธ์เป็นภาษาไทยที่เข้าใจง่าย พร้อมระบุที่มาและสมมติฐาน (Assumptions)
 2. **Deterministic SQL Guardrails (ความปลอดภัยสูงสุด)**:
    - ตรวจสอบ Abstract Syntax Tree (AST) ด้วย SQLGlot ก่อนส่งไปยังฐานข้อมูล
@@ -111,7 +111,7 @@ CLOUD/
 │   ├── agents/              # Query planner, Agent state และ Text-to-SQL logic
 │   ├── api/                 # REST API endpoints และ Request/Response schemas
 │   ├── core/                # System configuration และ environment settings
-│   ├── db/                  # RDS database connection และ Schema Catalog
+│   ├── db/                  # Redshift database connection และ Schema Catalog
 │   ├── guardrails/          # SQLGlot AST Guardrail validation
 │   ├── prompts/             # System prompts และ Text-to-SQL templates
 │   ├── providers/           # LLM Providers (Qwen via Groq API)
@@ -133,7 +133,7 @@ CLOUD/
 │   ├── translations.js      # Unified i18n Translation Engine & Bilingual Dictionary (TH/EN)
 │   ├── app.js & login.js    # Client-side controller logic
 │   └── styles.css           # Modern Theme Stylesheet
-├── scripts/                 # สคริปต์จัดการ Schema และ Benchmark บน RDS
+├── scripts/                 # สคริปต์จัดการ Schema และ Benchmark บน Redshift
 ├── tests/                   # Pytest automated test suite (33 tests)
 ├── .env.example             # ตัวอย่างการตั้งค่า Environment Variables
 ├── Dockerfile               # Dockerfile สำหรับ Build Deploy ขึ้น Amazon EC2
@@ -141,7 +141,7 @@ CLOUD/
 ├── package.json & server.js # Node.js Express สำหรับ AWS DynamoDB และ S3
 ├── requirements.txt         # Python runtime dependencies
 ├── requirements-dev.txt     # Python development & testing dependencies
-├── schema.sql               # PostgreSQL Schema Definition สำหรับ Amazon RDS
+├── schema.sql               # Redshift Schema Definition (DISTKEY/SORTKEY)
 ├── setup.bat                # สคริปต์ติดตั้งระบบอัตโนมัติสำหรับ Windows
 └── start.bat                # สคริปต์เริ่มการทำงานระบบพร้อมเปิดเบราว์เซอร์
 ```
@@ -152,9 +152,9 @@ CLOUD/
 
 - **Language & Frameworks**: Python 3.10+, FastAPI, Node.js (Express)
 - **AI / LLM Model**: Qwen (`qwen/qwen3.8-27b`) ผ่าน Groq Cloud API
-- **Database**: Amazon RDS PostgreSQL 16 (Star Schema: Fact & Dimension)
+- **Database**: Amazon Redshift (Star Schema: Fact & Dimension)
 - **Security & Validation**: SQLGlot, Pydantic v2
-- **Cloud Infrastructure**: Amazon EC2, Amazon RDS, Amazon S3, Amazon DynamoDB
+- **Cloud Infrastructure**: Amazon EC2, Amazon Redshift, Amazon S3, Amazon DynamoDB
 - **Frontend & i18n**: HTML5, Modern CSS (Responsive), Vanilla JavaScript, Chart.js, i18next (Internationalization)
 
 ---
@@ -181,8 +181,8 @@ LLM_PROVIDER=qwen
 GROQ_MODEL=qwen/qwen3.8-27b
 GROQ_API_KEY=...
 
-# Amazon RDS PostgreSQL
-DATABASE_URL=postgresql+psycopg://<USER>:<PASSWORD>@<ENDPOINT>:5432/<DB_NAME>?sslmode=require
+# Amazon Redshift (พอร์ต 5439, ฐานข้อมูล dev)
+DATABASE_URL=postgresql+psycopg://<USER>:<PASSWORD>@<REDSHIFT_ENDPOINT>:5439/dev?sslmode=require
 DATABASE_SCHEMA=data_warehouse
 ```
 
@@ -233,7 +233,7 @@ package-handoff.bat
 .\.venv\Scripts\python.exe scripts\smoke_test_providers.py
 ```
 
-### ตรวจสอบความถูกต้องของ Schema บน RDS
+### ตรวจสอบความถูกต้องของ Schema บน Redshift
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\verify_rds_schema.py
@@ -251,7 +251,7 @@ package-handoff.bat
   "env": "local",
   "llm_provider": "qwen",
   "llm_model": "qwen/qwen3.8-27b",
-  "database_source": "amazon-rds"
+  "database_source": "amazon-redshift"
 }
 ```
 
