@@ -1,4 +1,4 @@
-"""AgriChain ETL Lambda (S3 CSV -> Amazon RDS PostgreSQL data warehouse).
+"""AgriChain ETL Lambda (S3 CSV -> Amazon Redshift data warehouse).
 
 Invoked in two ways:
   1. By AWS Step Functions (state machine "agrichain-etl") with the EventBridge
@@ -6,14 +6,13 @@ Invoked in two ways:
      (The classic S3 notification shape {"Records": [...]} is accepted too.)
   2. By CloudFormation as a custom resource (Custom::SchemaInit) at stack
      create/update time. It creates the schema + dim_date and seeds the
-     DynamoDB login table. The RDS instance lives in private subnets, so this is
+     DynamoDB login table. The Redshift cluster lives in private subnets, so this is
      the only place that can reach it during provisioning.
 """
 import hashlib
 import json
 import os
 import secrets
-import ssl
 import urllib.parse
 import urllib.request
 from datetime import datetime
@@ -23,10 +22,10 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 
 DB_HOST = os.environ.get("DB_HOST")
-DB_NAME = os.environ.get("DB_NAME", "postgres")
+DB_NAME = os.environ.get("DB_NAME", "dev")
 DB_USER = os.environ.get("DB_USER")
 DB_PASS = os.environ.get("DB_PASS")
-DB_PORT = os.environ.get("DB_PORT", "5432")
+DB_PORT = os.environ.get("DB_PORT", "5439")
 DB_SCHEMA = os.environ.get("DB_SCHEMA", "data_warehouse")
 DYNAMODB_TABLE = os.environ.get("DYNAMODB_TABLE", "user_login")
 
@@ -39,21 +38,16 @@ def get_db_engine():
     """Create (and reuse across warm invocations) the SQLAlchemy engine."""
     global _engine
     if _engine is None:
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False  # traffic never leaves the VPC
-        ctx.verify_mode = ssl.CERT_NONE
-        url = "postgresql+pg8000://{}:{}@{}:{}/{}".format(
+        # sqlalchemy-redshift: the plain PostgreSQL dialect sends commands Redshift rejects
+        # (e.g. "show standard_conforming_strings") when it first connects
+        url = "redshift+redshift_connector://{}:{}@{}:{}/{}".format(
             urllib.parse.quote_plus(DB_USER or ""),
             urllib.parse.quote_plus(DB_PASS or ""),
             DB_HOST,
             DB_PORT,
             DB_NAME,
         )
-        _engine = create_engine(
-            url,
-            connect_args={"ssl_context": ctx},
-            pool_pre_ping=True,
-        )
+        _engine = create_engine(url, pool_pre_ping=True)
     return _engine
 
 
@@ -122,7 +116,7 @@ def etl_crop(df, engine):
 
 def etl_farmer(df, engine):
     df["farmer_name"] = df["farmer_name"].str.strip()
-    df["valid_from"] = datetime.now().date()  # real dates: pg8000 sends str as text
+    df["valid_from"] = datetime.now().date()  # real dates, not strings
     df["valid_to"] = datetime(9999, 12, 31).date()
     df["is_current"] = True
     # NOTE: a full SCD Type 2 would also close (valid_to) the previous version
@@ -140,7 +134,7 @@ def etl_warehouse(df, engine):
 def etl_customer(df, engine):
     df["customer_name"] = df["customer_name"].str.strip()
     df["credit_limit_thb"] = df["credit_limit_thb"].fillna(0.00)
-    df["valid_from"] = datetime.now().date()  # real dates: pg8000 sends str as text
+    df["valid_from"] = datetime.now().date()  # real dates, not strings
     df["valid_to"] = datetime(9999, 12, 31).date()
     df["is_current"] = True
     return load(df, engine, "dim_customer")
@@ -270,20 +264,24 @@ def init_schema():
         for stmt in statements:
             conn.execute(text(stmt))
         # dim_date has no source CSV: generate it (plus the 9999-12-31 sentinel used
-        # for shipments that have not been delivered yet)
-        conn.execute(text(f"""
-            INSERT INTO {DB_SCHEMA}.dim_date (date_key, date, day, month, quarter, year, weekday)
-            SELECT to_char(d, 'YYYYMMDD')::int, d::date, EXTRACT(DAY FROM d)::int,
-                   EXTRACT(MONTH FROM d)::int, EXTRACT(QUARTER FROM d)::int,
-                   EXTRACT(YEAR FROM d)::int, trim(to_char(d, 'Day'))
-            FROM generate_series('2015-01-01'::date, '2035-12-31'::date, interval '1 day') AS d
-            ON CONFLICT (date_key) DO NOTHING
-        """))
-        conn.execute(text(f"""
-            INSERT INTO {DB_SCHEMA}.dim_date (date_key, date, day, month, quarter, year, weekday)
-            VALUES (99991231, '9999-12-31', 31, 12, 4, 9999, 'Friday')
-            ON CONFLICT (date_key) DO NOTHING
-        """))
+        # for shipments that have not been delivered yet). Redshift has no
+        # generate_series() for table inserts and no ON CONFLICT, so build the rows
+        # here and only insert when the table is still empty (keeps init idempotent).
+        have = conn.execute(text(f"SELECT COUNT(*) FROM {DB_SCHEMA}.dim_date")).scalar()
+        if not have:
+            rows = []
+            for d in pd.date_range("2015-01-01", "2035-12-31", freq="D"):
+                rows.append({"k": int(d.strftime("%Y%m%d")), "d": d.date(), "dd": d.day,
+                             "m": d.month, "q": (d.month - 1) // 3 + 1, "y": d.year,
+                             "w": d.strftime("%A")})
+            rows.append({"k": 99991231, "d": datetime(9999, 12, 31).date(), "dd": 31,
+                         "m": 12, "q": 4, "y": 9999, "w": "Friday"})
+            for i in range(0, len(rows), 500):
+                chunk = rows[i:i + 500]
+                values = ",".join(f"(:k{j}, :d{j}, :dd{j}, :m{j}, :q{j}, :y{j}, :w{j})" for j in range(len(chunk)))
+                params = {f"{n}{j}": r[n] for j, r in enumerate(chunk) for n in ("k", "d", "dd", "m", "q", "y", "w")}
+                conn.execute(text(f"INSERT INTO {DB_SCHEMA}.dim_date "
+                                  f"(date_key, date, day, month, quarter, year, weekday) VALUES {values}"), params)
     print(f"Schema '{DB_SCHEMA}' ready")
 
 

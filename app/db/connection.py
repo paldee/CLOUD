@@ -10,7 +10,11 @@ from app.core.config import settings
 def create_db_engine() -> Engine:
     if not settings.database_url:
         raise RuntimeError("DATABASE_URL is not configured")
-    return create_engine(settings.database_url, pool_pre_ping=True)
+    url = settings.database_url
+    if ".redshift.amazonaws.com" in url:
+        # The PostgreSQL dialect cannot initialise against Redshift; use the Redshift one
+        url = url.replace("postgresql+psycopg://", "redshift+redshift_connector://").split("?")[0]
+    return create_engine(url, pool_pre_ping=True)
 
 
 engine = create_db_engine() if settings.database_url else None

@@ -4,7 +4,7 @@ from app.core.config import settings
 
 
 DATABASE_SCHEMA = settings.database_schema
-SQL_DIALECT = "PostgreSQL"
+SQL_DIALECT = "Amazon Redshift"
 
 
 DATA_WAREHOUSE_SCHEMA: dict[str, dict[str, Any]] = {

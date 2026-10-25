@@ -12,7 +12,7 @@ def run_readonly_query(sql: str) -> list[dict]:
         return []
 
     with SessionLocal() as session:
-        if session.bind is not None and session.bind.dialect.name == "postgresql":
+        if session.bind is not None and session.bind.dialect.name in ("postgresql", "redshift"):
             timeout_ms = max(settings.max_sql_seconds, 1) * 1000
             session.execute(text(f"SET LOCAL statement_timeout = {timeout_ms}"))
 

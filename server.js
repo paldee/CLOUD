@@ -608,7 +608,7 @@ app.get('/api/dashboard-data', async (req, res) => {
 });
 
 // ==========================================
-// API 7: ดึงข้อมูลจาก RDS Data Warehouse พร้อมระบบตัวกรอง (Filters)
+// API 7: ดึงข้อมูลจาก Redshift Data Warehouse พร้อมระบบตัวกรอง (Filters)
 // ==========================================
 const { Pool } = require('pg');
 
@@ -616,7 +616,7 @@ const { Pool } = require('pg');
 const DB_SCHEMA = process.env.DB_SCHEMA || process.env.DATABASE_SCHEMA || 'public';
 if (!/^[a-z_][a-z0-9_]*$/i.test(DB_SCHEMA)) throw new Error('Invalid DB_SCHEMA: ' + DB_SCHEMA);
 
-// RDS is private to the VPC; SSL is used but the AWS CA is not pinned (only this pool, not the AWS SDK)
+// Redshift is private to the VPC; SSL is used but the AWS CA is not pinned (only this pool, not the AWS SDK)
 const pool = process.env.DATABASE_URL
     ? new Pool({
         connectionString: process.env.DATABASE_URL

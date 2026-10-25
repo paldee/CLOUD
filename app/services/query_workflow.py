@@ -10,6 +10,8 @@ from app.visualization.chart_builder import build_chart_spec
 def resolve_database_source_label(database_url: str = "", app_env: str = "") -> str:
     url = (database_url or settings.database_url or "").lower()
     env = (app_env or settings.app_env or "").lower()
+    if "redshift.amazonaws.com" in url:
+        return "amazon-redshift"
     if "rds.amazonaws.com" in url or "amazonaws.com" in url:
         return "amazon-rds"
     if "localhost" in url or "127.0.0.1" in url or env == "local":
@@ -67,7 +69,7 @@ def run_query_workflow(
         rows = run_readonly_query(validation.sql)
     except Exception as exc:
         return AgentResult(
-            answer=f"สร้าง SQL สำเร็จและผ่าน Guardrail แล้ว แต่ไม่สามารถเชื่อมต่อฐานข้อมูลได้ (กรุณาตรวจสอบว่า Amazon RDS เปิดใช้งานอยู่)",
+            answer=f"สร้าง SQL สำเร็จและผ่าน Guardrail แล้ว แต่ไม่สามารถเชื่อมต่อฐานข้อมูลได้ (กรุณาตรวจสอบว่า Amazon Redshift เปิดใช้งานอยู่)",
             sql=validation.sql,
             sources=[
                 resolve_database_source_label(),

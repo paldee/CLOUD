@@ -82,7 +82,10 @@ def get_or_create_param(ssm, name, value=None, generate=False):
         except ClientError as exc:
             if exc.response["Error"]["Code"] != "ParameterNotFound" or not generate:
                 raise SystemExit(f"SSM parameter {name} does not exist yet - pass its value on the command line")
-            value = "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(20))
+            while True:  # Redshift requires at least one upper, one lower and one digit
+                value = "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(20))
+                if any(c.islower() for c in value) and any(c.isupper() for c in value) and any(c.isdigit() for c in value):
+                    break
     ssm.put_parameter(Name=name, Value=value, Type="SecureString", Overwrite=True)
     return value
 
@@ -101,9 +104,9 @@ def deploy_stack(cfn, name, params):
             cfn.update_stack(StackName=name, TemplateBody=body, Parameters=cfn_params)
             waiter = cfn.get_waiter("stack_update_complete")
         else:
-            log(f"Creating stack {name} (RDS takes ~10 minutes)")
+            log(f"Creating stack {name} (Redshift takes ~5-10 minutes)")
             cfn.create_stack(StackName=name, TemplateBody=body, Parameters=cfn_params,
-                             OnFailure="ROLLBACK")
+                             OnFailure="DO_NOTHING" if os.environ.get("KEEP_ON_FAILURE") else "ROLLBACK")
             waiter = cfn.get_waiter("stack_create_complete")
     except ClientError as exc:
         if "No updates are to be performed" in str(exc):
@@ -124,14 +127,15 @@ def main():
     ap.add_argument("--stack-name", default="agrichain")
     ap.add_argument("--region", default=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
     ap.add_argument("--groq-key", help="Groq API key (omit to reuse the one already in SSM)")
-    ap.add_argument("--db-password", help="RDS master password, letters/digits, 12+ (default: generated once, kept in SSM)")
+    ap.add_argument("--db-password", help="Redshift master password (needs upper+lower+digit), letters/digits, 12+ (default: generated once, kept in SSM)")
     ap.add_argument("--admin-username", default="admin")
     ap.add_argument("--admin-name", default="Administrator")
     ap.add_argument("--admin-password", required=True, help="password of the first web login")
     ap.add_argument("--key-name", default="", help="optional EC2 key pair for SSH, e.g. vockey")
     ap.add_argument("--ssh-cidr", default="", help="optional CIDR allowed to SSH")
     ap.add_argument("--capacity", default="2")
-    ap.add_argument("--multi-az", action="store_true", help="RDS Multi-AZ (usually not allowed in Learner Lab)")
+    ap.add_argument("--node-type", default="ra3.large", help="Redshift node type (Learner Lab: ra3.* / rg.*)")
+    ap.add_argument("--nodes", default="1", help="Redshift node count (1 = single-node)")
     args = ap.parse_args()
 
     session = boto3.Session(region_name=args.region)
@@ -171,7 +175,7 @@ def main():
         "DBPassword": db_password, "DbPasswordParam": db_param, "GroqApiKeyParam": groq_param,
         "AdminUsername": args.admin_username, "AdminName": args.admin_name,
         "AdminPassword": args.admin_password, "KeyName": args.key_name, "SshCidr": args.ssh_cidr,
-        "DesiredCapacity": args.capacity, "DBMultiAZ": "true" if args.multi_az else "false",
+        "DesiredCapacity": args.capacity, "RedshiftNodeType": args.node_type, "RedshiftNodes": args.nodes,
     }
     deploy_stack(cfn, args.stack_name, params)
 

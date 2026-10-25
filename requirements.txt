@@ -4,6 +4,8 @@ pydantic-settings>=2.4.0
 python-dotenv>=1.0.1
 sqlalchemy>=2.0.32
 psycopg[binary]>=3.2.1
+redshift_connector>=2.1
+sqlalchemy-redshift>=1.0
 sqlglot>=25.20.0
 groq>=0.13.0
 

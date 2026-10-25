@@ -21,12 +21,12 @@ class SQLGuardrailError(ValueError):
 
 
 def validate_and_bound_sql(sql: str) -> SQLValidationResult:
-    """Parse, validate, and cap one PostgreSQL read-only query."""
+    """Parse, validate, and cap one Amazon Redshift read-only query."""
     if not sql.strip():
         return SQLValidationResult(False, violations=("SQL is empty",))
 
     try:
-        statements = parse(sql, read="postgres")
+        statements = parse(sql, read="redshift")
     except ParseError as exc:
         return SQLValidationResult(False, violations=(f"SQL parse error: {exc}",))
 
@@ -107,7 +107,7 @@ def validate_and_bound_sql(sql: str) -> SQLValidationResult:
     bounded_statement = _apply_row_limit(statement)
     return SQLValidationResult(
         True,
-        sql=bounded_statement.sql(dialect="postgres", pretty=True),
+        sql=bounded_statement.sql(dialect="redshift", pretty=True),
     )
 
 

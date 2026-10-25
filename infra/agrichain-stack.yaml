@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   AgriChain - Agriculture Supply Chain Data Warehouse AI Assistant.
   Implements the reference architecture (VPC, IGW, ALB, Auto Scaling group of
-  EC2 web+AI servers across 2 AZs, private RDS PostgreSQL in place of Redshift,
+  EC2 web+AI servers across 2 AZs, private Amazon Redshift data warehouse,
   DynamoDB login/session, S3 -> EventBridge -> Step Functions -> Lambda ETL)
   using only what AWS Academy Learner Lab allows (existing LabRole /
   LabInstanceProfile, no NAT gateway, no IAM creation).
@@ -25,12 +25,13 @@ Parameters:
     Type: String
     Default: admin_agri
     AllowedPattern: "[a-z][a-z0-9_]{2,20}"
+    Description: Redshift master user (note - "admin" itself is reserved by Redshift)
   DBPassword:
     Type: String
     NoEcho: true
     MinLength: 12
-    AllowedPattern: "[A-Za-z0-9]+"
-    ConstraintDescription: At least 12 letters/digits (kept URL-safe on purpose)
+    AllowedPattern: "(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])[A-Za-z0-9]+"
+    ConstraintDescription: At least 12 letters/digits with upper, lower and a digit (Redshift rule, URL-safe on purpose)
   DbPasswordParam:
     Type: String
     Default: /agrichain/db_password
@@ -39,14 +40,15 @@ Parameters:
     Type: String
     Default: /agrichain/groq_api_key
     Description: SSM SecureString holding the Groq API key
-  DBInstanceClass:
+  RedshiftNodeType:
     Type: String
-    Default: db.t3.micro
-  DBMultiAZ:
-    Type: String
-    Default: "false"
-    AllowedValues: ["true", "false"]
-    Description: Learner Lab free-tier accounts usually cannot use Multi-AZ; the DB subnet group still spans both AZs
+    Default: ra3.large
+    Description: Node types orderable in the Learner Lab are ra3.* / rg.* (dc2.* is rejected)
+  RedshiftNodes:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    Description: 1 = single-node cluster
   InstanceType:
     Type: String
     Default: t3.small
@@ -86,6 +88,7 @@ Parameters:
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
 
 Conditions:
+  SingleNode: !Equals [!Ref RedshiftNodes, 1]
   HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
   HasSshCidr: !Not [!Equals [!Ref SshCidr, ""]]
 
@@ -167,7 +170,7 @@ Resources:
     Properties: { SubnetId: !Ref PublicSubnet2, RouteTableId: !Ref PublicRouteTable }
 
   # No default route: private subnets are isolated. (A NAT gateway costs money and
-  # is not needed - the ETL Lambda only talks to RDS, S3 and DynamoDB.)
+  # is not needed - the ETL Lambda only talks to Redshift, S3 and DynamoDB.)
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -231,38 +234,35 @@ Resources:
   DbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: PostgreSQL only from web servers and the ETL Lambda
+      GroupDescription: Redshift (5439) only from web servers and the ETL Lambda
       VpcId: !Ref Vpc
       SecurityGroupIngress:
-        - { IpProtocol: tcp, FromPort: 5432, ToPort: 5432, SourceSecurityGroupId: !Ref WebSecurityGroup }
-        - { IpProtocol: tcp, FromPort: 5432, ToPort: 5432, SourceSecurityGroupId: !Ref LambdaSecurityGroup }
+        - { IpProtocol: tcp, FromPort: 5439, ToPort: 5439, SourceSecurityGroupId: !Ref WebSecurityGroup }
+        - { IpProtocol: tcp, FromPort: 5439, ToPort: 5439, SourceSecurityGroupId: !Ref LambdaSecurityGroup }
       Tags: [{ Key: Name, Value: !Sub "${ProjectName}-db-sg" }]
 
-  # ---------------------------------------------- Data warehouse (Amazon RDS)
-  DbSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
+  # ------------------------------------------ Data warehouse (Amazon Redshift)
+  RedshiftSubnetGroup:
+    Type: AWS::Redshift::ClusterSubnetGroup
     Properties:
-      DBSubnetGroupDescription: Private subnets in both AZs (second one reserved for failover)
+      Description: Private subnets in both AZs
       SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
 
   Database:
-    Type: AWS::RDS::DBInstance
+    Type: AWS::Redshift::Cluster
     DeletionPolicy: Delete
     Properties:
-      DBInstanceIdentifier: !Sub "${ProjectName}-dwh-db"
-      Engine: postgres
-      DBInstanceClass: !Ref DBInstanceClass
-      AllocatedStorage: "20"
-      StorageType: gp2
+      ClusterIdentifier: !Sub "${ProjectName}-dwh"
+      ClusterType: !If [SingleNode, single-node, multi-node]
+      NumberOfNodes: !If [SingleNode, !Ref "AWS::NoValue", !Ref RedshiftNodes]
+      NodeType: !Ref RedshiftNodeType
+      DBName: dev
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Ref DBPassword
-      DBSubnetGroupName: !Ref DbSubnetGroup
-      VPCSecurityGroups: [!Ref DbSecurityGroup]
+      ClusterSubnetGroupName: !Ref RedshiftSubnetGroup
+      VpcSecurityGroupIds: [!Ref DbSecurityGroup]
       PubliclyAccessible: false
-      MultiAZ: !Ref DBMultiAZ
-      BackupRetentionPeriod: 0
-      StorageEncrypted: false
-      DeletionProtection: false
+      Encrypted: true
 
   # -------------------------------------------- DynamoDB: login & sessions
   UserLoginTable:
@@ -327,7 +327,7 @@ Resources:
         Variables:
           DB_HOST: !GetAtt Database.Endpoint.Address
           DB_PORT: !GetAtt Database.Endpoint.Port
-          DB_NAME: postgres
+          DB_NAME: dev
           DB_USER: !Ref DBUsername
           DB_PASS: !Ref DBPassword
           DB_SCHEMA: data_warehouse
@@ -354,7 +354,7 @@ Resources:
       RoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/${LabRoleName}"
       DefinitionString: !Sub |
         {
-          "Comment": "CSV uploaded to S3 -> Lambda ETL -> RDS data warehouse",
+          "Comment": "CSV uploaded to S3 -> Lambda ETL -> Redshift data warehouse",
           "StartAt": "RunETL",
           "States": {
             "RunETL": {
@@ -477,7 +477,7 @@ Resources:
             CORS_ORIGINS=http://${LoadBalancer.DNSName}
             LLM_PROVIDER=qwen
             GROQ_API_KEY=$GROQ_KEY
-            DATABASE_URL=postgresql+psycopg://${DBUsername}:$DB_PASS@${Database.Endpoint.Address}:${Database.Endpoint.Port}/postgres?sslmode=require
+            DATABASE_URL=postgresql+psycopg://${DBUsername}:$DB_PASS@${Database.Endpoint.Address}:${Database.Endpoint.Port}/dev?sslmode=require
             DATABASE_SCHEMA=data_warehouse
             MAX_SQL_ROWS=100
             MAX_SQL_SECONDS=15
@@ -559,7 +559,7 @@ Outputs:
     Value: !Sub "http://${LoadBalancer.DNSName}"
   CsvBucketName:
     Value: !Ref CsvBucket
-  RdsEndpoint:
+  RedshiftEndpoint:
     Value: !GetAtt Database.Endpoint.Address
   EtlStateMachineArn:
     Value: !Ref EtlStateMachine

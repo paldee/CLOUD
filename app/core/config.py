@@ -34,12 +34,12 @@ class Settings(BaseSettings):
             return ""
         if not (v.startswith("postgresql://") or v.startswith("postgresql+psycopg://") or v.startswith("sqlite")):
             host = v
-            port = "5432"
+            port = "5439"
             if ":" in host:
                 parts = host.split(":", 1)
                 host = parts[0]
                 port = parts[1]
-            return f"postgresql+psycopg://admin_agri:admin_agri_pass@{host}:{port}/postgres?sslmode=require"
+            return f"postgresql+psycopg://admin_agri:admin_agri_pass@{host}:{port}/dev?sslmode=require"
         return v
 
     max_sql_rows: int = 100
